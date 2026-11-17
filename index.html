@@ -1,0 +1,1514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Glidepath Retirement Planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: a two-pane instrument. Left pane is the flight plan (inputs); right pane is the readout,
+   led by one bold element: 100 dots, one per hundred simulated markets, lit when the money lasts. */
+:root{
+  --bg:#edf0f5; --surface:#fbfcfd; --raised:#ffffff; --sunk:#e4e8ef;
+  --ink:#0f1a2c; --ink-2:#44516a; --ink-3:#6b778c; --line:#d6dce6; --line-2:#e6eaf0;
+  --accent:#5a48d8; --accent-ink:#ffffff; --accent-soft:#e9e6fb;
+  --good:#0a8a0a; --warn:#b97a00; --serious:#c9582a; --crit:#c93030;
+  --good-soft:#e2f3e2; --warn-soft:#fbefd2; --crit-soft:#f9e1e1;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#008300;
+  --scen-a:#0f1a2c; --scen-b:#5d6b85; --scen-c:#a3adc0;
+  --display:"Instrument Serif","Iowan Old Style","Palatino Linotype",Georgia,serif;
+  --body:"Hanken Grotesk",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --shadow:0 1px 2px rgba(15,26,44,.06),0 8px 24px -12px rgba(15,26,44,.18);
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0b101c; --surface:#131a2b; --raised:#19223a; --sunk:#0f1524;
+    --ink:#eef2fa; --ink-2:#b9c3d6; --ink-3:#8793ab; --line:#28324c; --line-2:#1e2740;
+    --accent:#9a8ff0; --accent-ink:#0b101c; --accent-soft:#252347;
+    --good:#2fbf4a; --warn:#fab219; --serious:#ec835a; --crit:#f06a6a;
+    --good-soft:#12301c; --warn-soft:#3a2c0c; --crit-soft:#3a1719;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#0ca30c;
+    --scen-a:#eef2fa; --scen-b:#9aa6bd; --scen-c:#5d6984;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 32px -16px rgba(0,0,0,.7);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0b101c; --surface:#131a2b; --raised:#19223a; --sunk:#0f1524;
+  --ink:#eef2fa; --ink-2:#b9c3d6; --ink-3:#8793ab; --line:#28324c; --line-2:#1e2740;
+  --accent:#9a8ff0; --accent-ink:#0b101c; --accent-soft:#252347;
+  --good:#2fbf4a; --warn:#fab219; --serious:#ec835a; --crit:#f06a6a;
+  --good-soft:#12301c; --warn-soft:#3a2c0c; --crit-soft:#3a1719;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#0ca30c;
+  --scen-a:#eef2fa; --scen-b:#9aa6bd; --scen-c:#5d6984;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 32px -16px rgba(0,0,0,.7);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.45;-webkit-font-smoothing:antialiased;overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.num{font-variant-numeric:tabular-nums}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3)}
+
+.app{height:100%;display:grid;grid-template-columns:minmax(330px,392px) minmax(0,1fr)}
+/* ---------- inputs pane ---------- */
+.plan{height:100%;overflow:auto;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;overscroll-behavior:contain}
+.brand{padding:20px 20px 14px;display:flex;flex-direction:column;gap:2px;border-bottom:1px solid var(--line-2)}
+.brand h1{font-family:var(--display);font-weight:400;font-size:34px;line-height:1;margin:0;letter-spacing:-.01em}
+.brand h1 i{color:var(--accent)}
+.brand p{margin:6px 0 0;color:var(--ink-3);font-size:13.5px}
+.plan-tools{display:flex;flex-wrap:wrap;gap:6px;padding:12px 20px;border-bottom:1px solid var(--line-2)}
+.btn{border:1px solid var(--line);background:var(--raised);border-radius:8px;padding:7px 11px;font-size:13.5px;font-weight:500;color:var(--ink-2);min-height:36px}
+.btn:hover{border-color:var(--ink-3);color:var(--ink)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.small{padding:4px 9px;min-height:30px;font-size:13px}
+.sections{flex:1}
+details.sec{border-bottom:1px solid var(--line-2)}
+details.sec>summary{list-style:none;cursor:pointer;padding:14px 20px;display:flex;align-items:baseline;gap:10px;justify-content:space-between}
+details.sec>summary::-webkit-details-marker{display:none}
+details.sec>summary .t{font-weight:600;font-size:15.5px}
+details.sec>summary .s{color:var(--ink-3);font-size:13px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
+details.sec>summary::after{content:"+";font-family:var(--mono);color:var(--ink-3);flex:none}
+details.sec[open]>summary::after{content:"–"}
+details.sec[open]>summary .s{visibility:hidden}
+.fields{padding:2px 20px 18px;display:grid;grid-template-columns:1fr 1fr;gap:12px 12px}
+.f{display:flex;flex-direction:column;gap:5px;min-width:0}
+.f.wide{grid-column:1/-1}
+.f label,.f .lab{font-size:13px;color:var(--ink-2);font-weight:500;display:flex;gap:6px;align-items:center;justify-content:space-between}
+.f .q{border:1px solid var(--line);background:none;border-radius:50%;width:18px;height:18px;font-size:11px;line-height:1;color:var(--ink-3);padding:0;flex:none}
+.f .hint{font-size:12.5px;color:var(--ink-3);line-height:1.4;display:none}
+.f.show-hint .hint{display:block}
+.inp{display:flex;align-items:center;border:1px solid var(--line);background:var(--raised);border-radius:8px;height:40px;overflow:hidden}
+.inp:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.inp span{padding:0 0 0 10px;color:var(--ink-3);font-size:14px;flex:none}
+.inp span.suf{padding:0 10px 0 0}
+.inp input{border:0;background:none;outline:none;width:100%;min-width:0;height:100%;padding:0 10px;font-variant-numeric:tabular-nums;font-size:15px}
+.inp span+input{padding-left:4px}
+select.sel{height:40px;border:1px solid var(--line);background:var(--raised);border-radius:8px;padding:0 8px;width:100%;font-size:15px}
+input[type=range]{width:100%;accent-color:var(--accent);margin:2px 0 0;height:22px}
+.seg{display:flex;border:1px solid var(--line);background:var(--sunk);border-radius:9px;padding:3px;gap:3px}
+.seg button{flex:1;border:0;background:none;border-radius:6px;padding:7px 8px;font-size:13.5px;font-weight:500;color:var(--ink-2);min-height:34px;white-space:nowrap}
+.seg button[aria-pressed=true]{background:var(--raised);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.14)}
+.grid20{grid-column:1/-1;display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.grid20 .cell{display:flex;flex-direction:column;gap:2px}
+.grid20 .cell span{font-family:var(--mono);font-size:10.5px;color:var(--ink-3)}
+.grid20 input{height:32px;border:1px solid var(--line);background:var(--raised);border-radius:6px;padding:0 6px;font-size:13px;width:100%;font-variant-numeric:tabular-nums}
+.sub{grid-column:1/-1;font-size:12.5px;color:var(--ink-3);margin:0}
+.events{grid-column:1/-1;display:flex;flex-direction:column;gap:8px}
+.event{border:1px solid var(--line);border-radius:10px;padding:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px;background:var(--sunk)}
+.event .row{grid-column:1/-1;display:flex;gap:8px;align-items:center;justify-content:space-between}
+.plan-foot{padding:14px 20px 28px;color:var(--ink-3);font-size:12.5px}
+
+/* ---------- readout pane ---------- */
+.out{height:100%;overflow:auto;min-width:0;scroll-behavior:smooth}
+.bar{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);padding:10px clamp(16px,3vw,36px);display:flex;gap:10px 14px;align-items:center;flex-wrap:nowrap}
+.bar .seg{flex:none;max-width:100%}
+.bar nav{display:flex;gap:0;overflow-x:auto;scrollbar-width:none;margin-left:auto;min-width:0;flex:0 1 auto}
+.bar nav::-webkit-scrollbar{display:none}
+.bar .bar-pdf{order:3;flex:none;min-height:34px}
+.btn[disabled]{opacity:.6;cursor:progress}
+.btn[hidden]{display:none}
+.bar nav a{color:var(--ink-2);text-decoration:none;font-size:13.5px;padding:6px 7px;border-radius:6px;white-space:nowrap}
+.bar nav a:hover{background:var(--sunk);color:var(--ink)}
+.wrap{padding:clamp(16px,3vw,36px);display:flex;flex-direction:column;gap:clamp(18px,2.4vw,28px);max-width:1280px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:clamp(16px,2.2vw,26px);box-shadow:var(--shadow);min-width:0}
+.card>header{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline;justify-content:space-between;margin-bottom:14px}
+.card h2{font-family:var(--display);font-weight:400;font-size:clamp(26px,3vw,34px);line-height:1.05;margin:0;text-wrap:balance;letter-spacing:-.005em}
+.card .dek{color:var(--ink-2);font-size:14.5px;margin:6px 0 0;max-width:68ch}
+.two{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:clamp(18px,2.4vw,28px)}
+
+/* hero */
+.hero{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:clamp(18px,3vw,40px);align-items:center}
+.hero h2{font-size:clamp(34px,4.6vw,56px)}
+.verdict{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-top:14px}
+.verdict .big{font-family:var(--display);font-size:clamp(72px,10vw,128px);line-height:.86;letter-spacing:-.02em}
+.verdict .big small{font-size:.42em;color:var(--ink-3);margin-left:2px}
+.pill{display:inline-flex;align-items:center;gap:7px;border-radius:999px;padding:5px 12px 5px 9px;font-size:13.5px;font-weight:600;border:1px solid transparent}
+.pill svg{flex:none}
+.pill.good{background:var(--good-soft);color:var(--good)} .pill.warn{background:var(--warn-soft);color:var(--warn)} .pill.crit{background:var(--crit-soft);color:var(--crit)}
+.pill.busy{background:var(--sunk);color:var(--ink-2)}
+.hero .say{font-size:17px;color:var(--ink-2);margin:14px 0 0;max-width:46ch}
+.hero .say b{color:var(--ink);font-weight:600}
+.dots{display:grid;grid-template-columns:repeat(20,1fr);gap:clamp(3px,.55vw,7px);padding:clamp(12px,1.6vw,20px);background:var(--sunk);border-radius:14px;border:1px solid var(--line-2)}
+.dots i{aspect-ratio:1;border-radius:50%;background:var(--accent);transition:background .35s,transform .35s,opacity .35s;transform:scale(1)}
+.dots i.miss{background:transparent;box-shadow:inset 0 0 0 1.5px var(--crit)}
+.dots i.wait{background:var(--line);transform:scale(.55)}
+.dots-cap{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--ink-2);margin-top:10px}
+.dots-cap span{display:inline-flex;gap:6px;align-items:center}
+.dots-cap i{width:10px;height:10px;border-radius:50%;background:var(--accent);display:inline-block}
+.dots-cap i.miss{background:transparent;box-shadow:inset 0 0 0 1.5px var(--crit)}
+.progress{height:3px;background:var(--line-2);border-radius:2px;overflow:hidden;margin-top:10px;opacity:0;transition:opacity .2s}
+.progress.on{opacity:1}
+.progress b{display:block;height:100%;width:0;background:var(--accent);transition:width .15s linear}
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:22px}
+.tile{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--raised);min-width:0}
+.tile .v{font-family:var(--display);font-size:clamp(26px,2.6vw,34px);line-height:1.1;margin-top:4px;white-space:nowrap}
+.tile .n{font-size:12.5px;color:var(--ink-3);margin-top:2px}
+.runway{margin-top:22px}
+.runway svg{display:block;width:100%;height:auto}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chip{font-size:12.5px;border:1px solid var(--line);border-radius:999px;padding:4px 10px;color:var(--ink-2);background:var(--raised);display:inline-flex;gap:6px;align-items:center}
+.chip b{font-family:var(--mono);font-weight:500;color:var(--ink)}
+.chip.crit{border-color:var(--crit);color:var(--crit)} .chip.crit b{color:var(--crit)}
+.example{font-size:12.5px;background:var(--accent-soft);color:var(--accent);border-radius:999px;padding:4px 10px;font-weight:600}
+
+/* charts */
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--ink-2);margin:0 0 8px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:12px;height:12px;border-radius:3px;display:inline-block;flex:none}
+.legend i.ln{height:0;border-top:2px solid;border-radius:0;width:16px}
+.legend i.dash{height:0;border-top:2px dashed;border-radius:0;width:16px}
+.chart{position:relative;min-width:0;touch-action:pan-y}
+.chart svg{display:block;width:100%;overflow:visible}
+.chart text{font-family:var(--mono);font-size:11px;fill:var(--ink-3)}
+.chart text.lbl{font-family:var(--body);font-size:12px;fill:var(--ink-2);font-weight:500}
+.tip{position:absolute;pointer-events:none;background:var(--raised);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:9px 11px;font-size:13px;min-width:170px;z-index:5;opacity:0;transition:opacity .08s}
+.tip.on{opacity:1}
+.tip h5{margin:0 0 6px;font-size:12px;font-family:var(--mono);font-weight:500;color:var(--ink-3)}
+.tip div{display:flex;gap:8px;align-items:center;justify-content:space-between;white-space:nowrap}
+.tip div span{display:inline-flex;gap:6px;align-items:center;color:var(--ink-2)}
+.tip div b{font-weight:600;font-variant-numeric:tabular-nums}
+.tip i{width:9px;height:9px;border-radius:2px;display:inline-block}
+.tip .tot{border-top:1px solid var(--line);margin-top:5px;padding-top:5px}
+
+/* tables */
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:12px;-webkit-overflow-scrolling:touch}
+table{border-collapse:collapse;width:100%;font-size:13.5px;font-variant-numeric:tabular-nums}
+th,td{padding:7px 10px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line-2)}
+th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--surface);z-index:1;border-right:1px solid var(--line-2)}
+thead th{font-family:var(--mono);font-size:11.5px;font-weight:500;color:var(--ink-3);background:var(--sunk);position:sticky;top:0}
+thead th:first-child{background:var(--sunk);z-index:2}
+tr.grp td{background:var(--sunk);font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);padding-top:9px}
+tr.grp td:first-child{background:var(--sunk)}
+tr.tot td{font-weight:700}
+tr:last-child td{border-bottom:0}
+td.neg{color:var(--crit);font-weight:600}
+td.zero{color:var(--ink-3)}
+.lab-row{display:flex;gap:10px;align-items:center}
+.mini{height:6px;border-radius:3px;background:var(--accent);min-width:2px;display:inline-block;vertical-align:middle;margin-right:8px}
+.mini.tax{background:var(--s2)}
+table.compact{font-size:13px}
+table.compact th,table.compact td{padding:7px 8px}
+table.compact td:first-child,table.compact th:first-child{white-space:normal;min-width:96px}
+#strat-table .mini{margin-right:6px}
+.card{scroll-margin-top:64px}
+tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+.scen-tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:16px}
+.scen-tile{border:1px solid var(--line);background:var(--raised);border-radius:12px;padding:12px 14px;text-align:left;min-width:0}
+.scen-tile[aria-pressed=true]{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.scen-tile .v{font-family:var(--display);font-size:32px;line-height:1.1}
+.scen-tile .n{font-size:12.5px;color:var(--ink-3)}
+.mc-ctl{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.prose{color:var(--ink-2);font-size:15px;max-width:72ch}
+.prose h3{font-size:15px;color:var(--ink);margin:18px 0 4px}
+.prose p,.prose ul{margin:6px 0}
+.prose li{margin:3px 0}
+
+/* dialog + mobile */
+.fab{display:none}
+dialog{border:1px solid var(--line);border-radius:16px;background:var(--surface);color:var(--ink);padding:20px;width:min(560px,calc(100vw - 32px));box-shadow:var(--shadow)}
+dialog::backdrop{background:rgba(8,12,22,.55)}
+dialog h3{font-family:var(--display);font-weight:400;font-size:26px;margin:0 0 6px}
+dialog textarea{width:100%;height:180px;border:1px solid var(--line);border-radius:10px;background:var(--raised);padding:10px;font-family:var(--mono);font-size:12px}
+dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+.toast{position:fixed;left:50%;bottom:84px;transform:translate(-50%,20px);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:999px;font-size:14px;opacity:0;transition:.2s;pointer-events:none;z-index:80}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+.close-plan{display:none}
+@media (max-width:980px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  .plan{position:fixed;inset:0;z-index:60;transform:translateY(103%);transition:transform .28s cubic-bezier(.2,.8,.2,1);border-right:0}
+  body.editing .plan{transform:none}
+  .fab{display:flex;position:fixed;right:16px;bottom:16px;z-index:40;align-items:center;gap:8px;border-radius:999px;padding:13px 20px;background:var(--accent);color:var(--accent-ink);border:0;font-weight:600;font-size:15.5px;box-shadow:0 10px 30px -8px rgba(40,30,120,.55)}
+  .close-plan{display:flex;position:sticky;bottom:0;margin-top:auto;padding:12px 20px calc(12px + env(safe-area-inset-bottom));background:var(--surface);border-top:1px solid var(--line)}
+  .close-plan .btn{width:100%;min-height:46px;font-size:15.5px}
+  .hero,.two{grid-template-columns:minmax(0,1fr)}
+  .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .bar{flex-wrap:wrap}
+  .bar nav{margin-left:0;flex-basis:100%}
+  .bar .bar-pdf{order:0;margin-left:auto}
+  .wrap{padding-bottom:96px}
+}
+@media (max-width:520px){
+  .scen-tiles{grid-template-columns:minmax(0,1fr)}
+  .scen-tile{display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .dots{grid-template-columns:repeat(10,1fr);max-width:340px}
+  #year-table td:first-child,#strat-table td:first-child{white-space:normal;min-width:118px;max-width:150px}
+  #year-table th,#year-table td{padding:6px 8px;font-size:13px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="plan" id="plan" aria-label="Your plan">
+    <div class="brand">
+      <h1>Glide<i>path</i></h1>
+      <p>A 20-year retirement cash-flow plan: spending, taxes, Roth conversions and 10,000 simulated markets.</p>
+    </div>
+    <div class="plan-tools">
+      <button class="btn" id="btn-copy" type="button">Copy plan</button>
+      <button class="btn" id="btn-paste" type="button">Load a plan</button>
+      <button class="btn" id="btn-reset" type="button">Reset to example</button>
+      <button class="btn primary pdf-btn" type="button" hidden>Save PDF report</button>
+    </div>
+    <div class="sections" id="sections"></div>
+    <div class="plan-foot">Your numbers are saved only in this browser. Nothing you type is sent anywhere.</div>
+    <div class="close-plan"><button class="btn primary" id="btn-done" type="button">See the results</button></div>
+  </aside>
+
+  <main class="out" id="out">
+    <div class="bar">
+      <div class="seg" id="scen-seg" role="group" aria-label="Growth scenario"></div>
+      <button class="btn primary small pdf-btn bar-pdf" type="button" hidden>Save PDF</button>
+      <nav aria-label="Sections">
+        <a href="#outlook">Outlook</a><a href="#markets">Markets</a><a href="#balances">Balances</a><a href="#cashflow">Cash flow</a><a href="#taxes">Taxes</a><a href="#ira">IRA &amp; Roth</a><a href="#strategies">Strategies</a><a href="#years">Every year</a><a href="#method">Method</a>
+      </nav>
+    </div>
+    <div class="wrap">
+
+      <section class="card" id="outlook">
+        <div class="hero">
+          <div>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="eyebrow" id="hero-eyebrow"></span><span class="example" id="example-tag">Example plan. Replace with your numbers.</span></div>
+            <h2 style="margin-top:8px">Will the money last?</h2>
+            <div class="verdict"><div class="big num" id="hero-pct">–<small>%</small></div><span class="pill busy" id="hero-pill">Simulating…</span></div>
+            <p class="say" id="hero-say"></p>
+          </div>
+          <div>
+            <div class="dots" id="dots" role="img" aria-label="One dot per hundred simulated markets"></div>
+            <div class="progress" id="mc-progress"><b></b></div>
+            <div class="dots-cap"><span><i></i> money lasts all 20 years</span><span><i class="miss"></i> runs short</span><span id="dots-note"></span></div>
+          </div>
+        </div>
+        <div class="tiles" id="tiles"></div>
+        <div class="runway">
+          <div class="eyebrow" id="runway-cap" style="margin-bottom:6px"></div>
+          <div id="runway"></div>
+          <div class="chips" id="chips"></div>
+        </div>
+      </section>
+
+      <section class="card" id="markets">
+        <header><div><h2>Ten thousand different markets</h2><p class="dek">Each simulated market shuffles 20 years of returns around the scenario's average, then runs the full plan with taxes. The shaded bands show where total savings land.</p></div>
+          <div class="mc-ctl"><div class="seg" id="paths-seg" role="group" aria-label="Number of simulated markets"></div><button class="btn small" id="btn-reroll" type="button">Draw new markets</button></div></header>
+        <div class="scen-tiles" id="scen-tiles"></div>
+        <div class="two">
+          <div><div class="legend" id="fan-legend"></div><div class="chart" id="fan"></div></div>
+          <div><div class="eyebrow" style="margin-bottom:8px" id="pct-cap">Total savings by outcome</div><div class="tbl"><table id="pct-table" class="compact"></table></div></div>
+        </div>
+      </section>
+
+      <section class="card" id="balances">
+        <header><div><h2>Where the money sits</h2><p class="dek" id="bal-dek"></p></div></header>
+        <div class="two">
+          <div><div class="legend" id="mix-legend"></div><div class="chart" id="mix"></div></div>
+          <div><div class="legend" id="scen-legend"></div><div class="chart" id="scen"></div></div>
+        </div>
+      </section>
+
+      <section class="card" id="cashflow">
+        <header><div><h2>Paying for each year</h2><p class="dek">Bars show where each year's cash comes from. The line is what the year costs: spending plus every tax. Where the bars stop short of the line, the plan is out of money.</p></div></header>
+        <div class="legend" id="cash-legend"></div><div class="chart" id="cash"></div>
+      </section>
+
+      <section class="card" id="taxes">
+        <header><div><h2>What goes to taxes</h2><p class="dek" id="tax-dek"></p></div></header>
+        <div class="two">
+          <div><div class="legend" id="tax-legend"></div><div class="chart" id="tax"></div></div>
+          <div><div class="eyebrow" style="margin-bottom:8px">20-year totals by scenario</div><div class="tbl"><table id="tax-table" class="compact"></table></div></div>
+        </div>
+      </section>
+
+      <section class="card" id="ira">
+        <header><div><h2>Emptying the IRA on purpose</h2><p class="dek" id="ira-dek"></p></div></header>
+        <div class="two">
+          <div><div class="legend" id="dist-legend"></div><div class="chart" id="dist"></div></div>
+          <div><div class="legend" id="ti-legend"></div><div class="chart" id="ti"></div></div>
+        </div>
+      </section>
+
+      <section class="card" id="strategies">
+        <header><div><h2>Compare IRA strategies</h2><p class="dek">The same plan run six ways. Only the IRA withdrawal and Roth conversion rule changes. Money left in an IRA is still pre-tax, so read the first two columns together.</p></div></header>
+        <div class="tbl"><table id="strat-table" class="compact"></table></div>
+      </section>
+
+      <section class="card" id="years">
+        <header><div><h2>Every year, every number</h2><p class="dek">The full projection for the selected scenario. Copy it and paste straight into a spreadsheet.</p></div><button class="btn" id="btn-copy-table" type="button">Copy table</button></header>
+        <div class="tbl" style="max-height:70vh"><table id="year-table"></table></div>
+      </section>
+
+      <section class="card" id="method">
+        <header><div><h2>How this works</h2></div></header>
+        <div class="prose" id="method-body"></div>
+      </section>
+    </div>
+  </main>
+</div>
+<button class="fab" id="fab" type="button"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>Edit your plan</button>
+<dialog id="dlg"><h3>Load a plan</h3><p style="margin:0 0 10px;color:var(--ink-2);font-size:14px">Paste the text you got from “Copy plan”. It replaces the numbers on this page.</p><textarea id="dlg-text" aria-label="Plan text"></textarea><p id="dlg-err" style="color:var(--crit);font-size:13.5px;margin:8px 0 0;min-height:1.2em"></p><div class="row"><button class="btn" id="dlg-cancel" type="button">Cancel</button><button class="btn primary" id="dlg-ok" type="button">Load plan</button></div></dialog>
+<div class="toast" id="toast" role="status"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" async></script>
+<script id="engine-src">
+// Generated from the State Taxes sheet of the original workbook. One function per state.
+// ti = federal taxable income, mfj = married filing jointly, idx(y) = bracket index factor from base year y,
+// sidx = state indexing rate, year = tax year, draw*gp = brokerage long-term gain, gross = gross income before deductions.
+const STATE_TAX = {
+  AL: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(mfj?(((Math.min(Math.max(0,(ti-(0*idx(2025)))),(1000*idx(2025)))*0.02)+(Math.min(Math.max(0,(ti-(1000*idx(2025)))),(5000*idx(2025)))*0.04))+(Math.max(0,(ti-(6000*idx(2025))))*0.05)):(((Math.min(Math.max(0,(ti-(0*idx(2025)))),(500*idx(2025)))*0.02)+(Math.min(Math.max(0,(ti-(500*idx(2025)))),(2500*idx(2025)))*0.04))+(Math.max(0,(ti-(3000*idx(2025))))*0.05))),
+  AK: (ti,mfj,idx,sidx,year,draw,gp,gross)=>0,
+  AZ: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(ti*0.025),
+  AR: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(mfj?(((((Math.min(Math.max(0,(ti-(0*idx(2026)))),(5600*idx(2026)))*0)+(Math.min(Math.max(0,(ti-(5600*idx(2026)))),(5600*idx(2026)))*0.02))+(Math.min(Math.max(0,(ti-(11200*idx(2026)))),(4800*idx(2026)))*0.03))+(Math.min(Math.max(0,(ti-(16000*idx(2026)))),(10400*idx(2026)))*0.034))+(Math.max(0,(ti-(26400*idx(2026))))*0.037)):(((((Math.min(Math.max(0,(ti-(0*idx(2026)))),(5600*idx(2026)))*0)+(Math.min(Math.max(0,(ti-(5600*idx(2026)))),(5600*idx(2026)))*0.02))+(Math.min(Math.max(0,(ti-(11200*idx(2026)))),(4800*idx(2026)))*0.03))+(Math.min(Math.max(0,(ti-(16000*idx(2026)))),(10400*idx(2026)))*0.034))+(Math.max(0,(ti-(26400*idx(2026))))*0.037))),
+  CA: null, // dedicated engine below
+  CO: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(ti*0.044),
+  CT: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(mfj?((((((Math.min(Math.max(0,(ti-(0*idx(2025)))),(20000*idx(2025)))*0.03)+(Math.min(Math.max(0,(ti-(20000*idx(2025)))),(80000*idx(2025)))*0.05))+(Math.min(Math.max(0,(ti-(100000*idx(2025)))),(100000*idx(2025)))*0.055))+(Math.min(Math.max(0,(ti-(200000*idx(2025)))),(200000*idx(2025)))*0.06))+(Math.min(Math.max(0,(ti-(400000*idx(2025)))),(100000*idx(2025)))*0.065))+(Math.max(0,(ti-(500000*idx(2025))))*0.069)):((((((Math.min(Math.max(0,(ti-(0*idx(2025)))),(10000*idx(2025)))*0.03)+(Math.min(Math.max(0,(ti-(10000*idx(2025)))),(40000*idx(2025)))*0.05))+(Math.min(Math.max(0,(ti-(50000*idx(2025)))),(50000*idx(2025)))*0.055))+(Math.min(Math.max(0,(ti-(100000*idx(2025)))),(100000*idx(2025)))*0.06))+(Math.min(Math.max(0,(ti-(200000*idx(2025)))),(50000*idx(2025)))*0.065))+(Math.max(0,(ti-(250000*idx(2025))))*0.069))),
+  DE: (ti,mfj,idx,sidx,year,draw,gp,gross)=>((((((Math.min(Math.max(0,(ti-(2000*idx(2025)))),(3000*idx(2025)))*0.022)+(Math.min(Math.max(0,(ti-(5000*idx(2025)))),(5000*idx(2025)))*0.039))+(Math.min(Math.max(0,(ti-(10000*idx(2025)))),(10000*idx(2025)))*0.048))+(Math.min(Math.max(0,(ti-(20000*idx(2025)))),(5000*idx(2025)))*0.052))+(Math.min(Math.max(0,(ti-(25000*idx(2025)))),(35000*idx(2025)))*0.0555))+(Math.max(0,(ti-(60000*idx(2025))))*0.066)),
+  FL: (ti,mfj,idx,sidx,year,draw,gp,gross)=>0,
+  GA: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(ti*0.0499),
+  HI: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(mfj?((((((((((((Math.min(Math.max(0,(ti-(0*1))),(28800*1))*0.014)+(Math.min(Math.max(0,(ti-(28800*1))),(9600*1))*0.025))+(Math.min(Math.max(0,(ti-(38400*1))),(9600*1))*0.05))+(Math.min(Math.max(0,(ti-(48000*1))),(24000*1))*0.064))+(Math.min(Math.max(0,(ti-(72000*1))),(24000*1))*0.068))+(Math.min(Math.max(0,(ti-(96000*1))),(154000*1))*0.072))+(Math.min(Math.max(0,(ti-(250000*1))),(100000*1))*0.076))+(Math.min(Math.max(0,(ti-(350000*1))),(100000*1))*0.079))+(Math.min(Math.max(0,(ti-(450000*1))),(100000*1))*0.0825))+(Math.min(Math.max(0,(ti-(550000*1))),(100000*1))*0.09))+(Math.min(Math.max(0,(ti-(650000*1))),(350000*1))*0.1))+(Math.max(0,(ti-(1000000*1)))*0.13)):((((((((((((Math.min(Math.max(0,(ti-(0*1))),(14400*1))*0.014)+(Math.min(Math.max(0,(ti-(14400*1))),(4800*1))*0.025))+(Math.min(Math.max(0,(ti-(19200*1))),(4800*1))*0.05))+(Math.min(Math.max(0,(ti-(24000*1))),(12000*1))*0.064))+(Math.min(Math.max(0,(ti-(36000*1))),(12000*1))*0.068))+(Math.min(Math.max(0,(ti-(48000*1))),(77000*1))*0.072))+(Math.min(Math.max(0,(ti-(125000*1))),(50000*1))*0.076))+(Math.min(Math.max(0,(ti-(175000*1))),(50000*1))*0.079))+(Math.min(Math.max(0,(ti-(225000*1))),(50000*1))*0.0825))+(Math.min(Math.max(0,(ti-(275000*1))),(50000*1))*0.09))+(Math.min(Math.max(0,(ti-(325000*1))),(175000*1))*0.1))+(Math.max(0,(ti-(500000*1)))*0.13))),
+  ID: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(ti*0.058),
+  IL: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(ti*0.0495),
+  IN: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(ti*0.029),
+  IA: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(((Math.min(Math.max(0,(ti-(0*idx(2025)))),(6210*idx(2025)))*0.044)+(Math.min(Math.max(0,(ti-(6210*idx(2025)))),(24840*idx(2025)))*0.048))+(Math.max(0,(ti-(31050*idx(2025))))*0.057)),
+  KS: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(mfj?(((Math.min(Math.max(0,(ti-(0*idx(2025)))),(30000*idx(2025)))*0.031)+(Math.min(Math.max(0,(ti-(30000*idx(2025)))),(30000*idx(2025)))*0.0525))+(Math.max(0,(ti-(60000*idx(2025))))*0.057)):(((Math.min(Math.max(0,(ti-(0*idx(2025)))),(15000*idx(2025)))*0.031)+(Math.min(Math.max(0,(ti-(15000*idx(2025)))),(15000*idx(2025)))*0.0525))+(Math.max(0,(ti-(30000*idx(2025))))*0.057))),
+  KY: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(ti*0.035),
+  LA: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(((Math.min(Math.max(0,(ti-(0*idx(2025)))),(12500*idx(2025)))*0.0185)+(Math.min(Math.max(0,(ti-(12500*idx(2025)))),(37500*idx(2025)))*0.035))+(Math.max(0,(ti-(50000*idx(2025))))*0.0425)),
+  ME: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(mfj?((((Math.min(Math.max(0,(ti-(0*idx(2026)))),(54849*idx(2026)))*0.058)+(Math.min(Math.max(0,(ti-(54849*idx(2026)))),(74900*idx(2026)))*0.0675))+(Math.max(0,(ti-(129749*idx(2026))))*0.0715))+(Math.max(0,(ti-1500000))*0.02)):((((Math.min(Math.max(0,(ti-(0*idx(2026)))),(27399*idx(2026)))*0.058)+(Math.min(Math.max(0,(ti-(27399*idx(2026)))),(37450*idx(2026)))*0.0675))+(Math.max(0,(ti-(64849*idx(2026))))*0.0715))+(Math.max(0,(ti-1000000))*0.02))),
+  MD: (ti,mfj,idx,sidx,year,draw,gp,gross)=>((((((((Math.min(Math.max(0,(ti-(0*idx(2025)))),(1000*idx(2025)))*0.02)+(Math.min(Math.max(0,(ti-(1000*idx(2025)))),(1000*idx(2025)))*0.03))+(Math.min(Math.max(0,(ti-(2000*idx(2025)))),(1000*idx(2025)))*0.04))+(Math.min(Math.max(0,(ti-(3000*idx(2025)))),(97000*idx(2025)))*0.0475))+(Math.min(Math.max(0,(ti-(100000*idx(2025)))),(25000*idx(2025)))*0.05))+(Math.min(Math.max(0,(ti-(125000*idx(2025)))),(25000*idx(2025)))*0.0525))+(Math.min(Math.max(0,(ti-(150000*idx(2025)))),(100000*idx(2025)))*0.055))+(Math.max(0,(ti-(250000*idx(2025))))*0.0575)),
+  MA: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(ti*0.05),
+  MI: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(ti*0.0425),
+  MN: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(mfj?((((Math.min(Math.max(0,(ti-(0*idx(2025)))),(44050*idx(2025)))*0.0535)+(Math.min(Math.max(0,(ti-(44050*idx(2025)))),(131020*idx(2025)))*0.068))+(Math.min(Math.max(0,(ti-(175070*idx(2025)))),(100000*idx(2025)))*0.0785))+(Math.max(0,(ti-(275070*idx(2025))))*0.0985)):((((Math.min(Math.max(0,(ti-(0*idx(2025)))),(30070*idx(2025)))*0.0535)+(Math.min(Math.max(0,(ti-(30070*idx(2025)))),(68690*idx(2025)))*0.068))+(Math.min(Math.max(0,(ti-(98760*idx(2025)))),(64300*idx(2025)))*0.0785))+(Math.max(0,(ti-(163060*idx(2025))))*0.0985))),
+  MS: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(mfj?((Math.min(Math.max(0,(ti-(0*idx(2027)))),(10000*idx(2027)))*0)+(Math.max(0,(ti-(10000*idx(2027))))*0.0375)):((Math.min(Math.max(0,(ti-(0*idx(2027)))),(10000*idx(2027)))*0)+(Math.max(0,(ti-(10000*idx(2027))))*0.0375))),
+  MO: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(((((((((Math.min(Math.max(0,(ti-(1000*idx(2025)))),(1000*idx(2025)))*0.015)+(Math.min(Math.max(0,(ti-(2000*idx(2025)))),(1000*idx(2025)))*0.02))+(Math.min(Math.max(0,(ti-(3000*idx(2025)))),(1000*idx(2025)))*0.025))+(Math.min(Math.max(0,(ti-(4000*idx(2025)))),(1000*idx(2025)))*0.03))+(Math.min(Math.max(0,(ti-(5000*idx(2025)))),(1000*idx(2025)))*0.035))+(Math.min(Math.max(0,(ti-(6000*idx(2025)))),(1000*idx(2025)))*0.04))+(Math.min(Math.max(0,(ti-(7000*idx(2025)))),(1000*idx(2025)))*0.045))+(Math.min(Math.max(0,(ti-(8000*idx(2025)))),(1000*idx(2025)))*0.05))+(Math.max(0,(ti-(9000*idx(2025))))*0.048)),
+  MT: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(mfj?((Math.min(Math.max(0,(ti-(0*idx(2027)))),(130000*idx(2027)))*0.047)+(Math.max(0,(ti-(130000*idx(2027))))*0.054)):((Math.min(Math.max(0,(ti-(0*idx(2027)))),(65000*idx(2027)))*0.047)+(Math.max(0,(ti-(65000*idx(2027))))*0.054))),
+  NE: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(mfj?(((Math.min(Math.max(0,(ti-(0*idx(2026)))),(8250*idx(2026)))*0.0246)+(Math.min(Math.max(0,(ti-(8250*idx(2026)))),(41280*idx(2026)))*0.0351))+(Math.max(0,(ti-(49530*idx(2026))))*0.0399)):(((Math.min(Math.max(0,(ti-(0*idx(2026)))),(4130*idx(2026)))*0.0246)+(Math.min(Math.max(0,(ti-(4130*idx(2026)))),(20630*idx(2026)))*0.0351))+(Math.max(0,(ti-(24760*idx(2026))))*0.0399))),
+  NV: (ti,mfj,idx,sidx,year,draw,gp,gross)=>0,
+  NH: (ti,mfj,idx,sidx,year,draw,gp,gross)=>0,
+  NJ: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(mfj?(((((((Math.min(Math.max(0,(ti-(0*idx(2025)))),(20000*idx(2025)))*0.014)+(Math.min(Math.max(0,(ti-(20000*idx(2025)))),(30000*idx(2025)))*0.0175))+(Math.min(Math.max(0,(ti-(50000*idx(2025)))),(20000*idx(2025)))*0.035))+(Math.min(Math.max(0,(ti-(70000*idx(2025)))),(10000*idx(2025)))*0.05525))+(Math.min(Math.max(0,(ti-(80000*idx(2025)))),(70000*idx(2025)))*0.0637))+(Math.min(Math.max(0,(ti-(150000*idx(2025)))),(350000*idx(2025)))*0.0897))+(Math.max(0,(ti-(500000*idx(2025))))*0.1075)):((((((Math.min(Math.max(0,(ti-(0*idx(2025)))),(20000*idx(2025)))*0.014)+(Math.min(Math.max(0,(ti-(20000*idx(2025)))),(15000*idx(2025)))*0.0175))+(Math.min(Math.max(0,(ti-(35000*idx(2025)))),(5000*idx(2025)))*0.035))+(Math.min(Math.max(0,(ti-(40000*idx(2025)))),(35000*idx(2025)))*0.05525))+(Math.min(Math.max(0,(ti-(75000*idx(2025)))),(425000*idx(2025)))*0.0637))+(Math.max(0,(ti-(500000*idx(2025))))*0.0897))),
+  NM: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(mfj?(((((Math.min(Math.max(0,(ti-(0*idx(2025)))),(8000*idx(2025)))*0.017)+(Math.min(Math.max(0,(ti-(8000*idx(2025)))),(8000*idx(2025)))*0.032))+(Math.min(Math.max(0,(ti-(16000*idx(2025)))),(8000*idx(2025)))*0.047))+(Math.min(Math.max(0,(ti-(24000*idx(2025)))),(12000*idx(2025)))*0.049))+(Math.max(0,(ti-(36000*idx(2025))))*0.059)):(((((Math.min(Math.max(0,(ti-(0*idx(2025)))),(5500*idx(2025)))*0.017)+(Math.min(Math.max(0,(ti-(5500*idx(2025)))),(5500*idx(2025)))*0.032))+(Math.min(Math.max(0,(ti-(11000*idx(2025)))),(5000*idx(2025)))*0.047))+(Math.min(Math.max(0,(ti-(16000*idx(2025)))),(194000*idx(2025)))*0.049))+(Math.max(0,(ti-(210000*idx(2025))))*0.059))),
+  NY: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(mfj?(((((((((Math.min(Math.max(0,(ti-(0*idx(2026)))),(17150*idx(2026)))*0.038)+(Math.min(Math.max(0,(ti-(17150*idx(2026)))),(6450*idx(2026)))*0.043))+(Math.min(Math.max(0,(ti-(23600*idx(2026)))),(4300*idx(2026)))*0.0505))+(Math.min(Math.max(0,(ti-(27900*idx(2026)))),(133650*idx(2026)))*0.053))+(Math.min(Math.max(0,(ti-(161550*idx(2026)))),(161650*idx(2026)))*0.058))+(Math.min(Math.max(0,(ti-(323200*idx(2026)))),(1832150*idx(2026)))*0.0685))+(Math.min(Math.max(0,(ti-(2155350*idx(2026)))),(2844650*idx(2026)))*0.0965))+(Math.min(Math.max(0,(ti-(5000000*idx(2026)))),(20000000*idx(2026)))*0.103))+(Math.max(0,(ti-(25000000*idx(2026))))*0.109)):(((((((((Math.min(Math.max(0,(ti-(0*idx(2026)))),(8500*idx(2026)))*0.038)+(Math.min(Math.max(0,(ti-(8500*idx(2026)))),(3200*idx(2026)))*0.043))+(Math.min(Math.max(0,(ti-(11700*idx(2026)))),(2200*idx(2026)))*0.0505))+(Math.min(Math.max(0,(ti-(13900*idx(2026)))),(66750*idx(2026)))*0.053))+(Math.min(Math.max(0,(ti-(80650*idx(2026)))),(134750*idx(2026)))*0.058))+(Math.min(Math.max(0,(ti-(215400*idx(2026)))),(862150*idx(2026)))*0.0685))+(Math.min(Math.max(0,(ti-(1077550*idx(2026)))),(3922450*idx(2026)))*0.0965))+(Math.min(Math.max(0,(ti-(5000000*idx(2026)))),(20000000*idx(2026)))*0.103))+(Math.max(0,(ti-(25000000*idx(2026))))*0.109))),
+  NC: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(ti*0.0399),
+  ND: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(ti*0.025),
+  OH: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(mfj?((Math.min(Math.max(0,(ti-(0*idx(2026)))),(26050*idx(2026)))*0)+(Math.max(0,(ti-(26050*idx(2026))))*0.0275)):((Math.min(Math.max(0,(ti-(0*idx(2026)))),(26050*idx(2026)))*0)+(Math.max(0,(ti-(26050*idx(2026))))*0.0275))),
+  OK: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(mfj?((((Math.min(Math.max(0,(ti-(0*idx(2026)))),(7500*idx(2026)))*0)+(Math.min(Math.max(0,(ti-(7500*idx(2026)))),(2300*idx(2026)))*0.025))+(Math.min(Math.max(0,(ti-(9800*idx(2026)))),(4600*idx(2026)))*0.035))+(Math.max(0,(ti-(14400*idx(2026))))*0.045)):((((Math.min(Math.max(0,(ti-(0*idx(2026)))),(3750*idx(2026)))*0)+(Math.min(Math.max(0,(ti-(3750*idx(2026)))),(1150*idx(2026)))*0.025))+(Math.min(Math.max(0,(ti-(4900*idx(2026)))),(2300*idx(2026)))*0.035))+(Math.max(0,(ti-(7200*idx(2026))))*0.045))),
+  OR: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(mfj?((((Math.min(Math.max(0,(ti-(0*idx(2025)))),(18400*idx(2025)))*0.0475)+(Math.min(Math.max(0,(ti-(18400*idx(2025)))),(27800*idx(2025)))*0.0675))+(Math.min(Math.max(0,(ti-(46200*idx(2025)))),(203800*idx(2025)))*0.0875))+(Math.max(0,(ti-(250000*idx(2025))))*0.099)):((((Math.min(Math.max(0,(ti-(0*idx(2025)))),(10200*idx(2025)))*0.0475)+(Math.min(Math.max(0,(ti-(10200*idx(2025)))),(15550*idx(2025)))*0.0675))+(Math.min(Math.max(0,(ti-(25750*idx(2025)))),(99250*idx(2025)))*0.0875))+(Math.max(0,(ti-(125000*idx(2025))))*0.099))),
+  PA: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(ti*0.0307),
+  RI: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(mfj?(((((Math.min(Math.max(0,(ti-(0*idx(2027)))),(55000*idx(2027)))*0.0375)+(Math.min(Math.max(0,(ti-(55000*idx(2027)))),(70000*idx(2027)))*0.0475))+(Math.max(0,(ti-(125000*idx(2027))))*0.0599)))+(Math.max(0,(ti-(1000000*idx(2027))))*((year>=2029)?0.03:((year>=2028)?0.02:0.01)))):(((((Math.min(Math.max(0,(ti-(0*idx(2027)))),(55000*idx(2027)))*0.0375)+(Math.min(Math.max(0,(ti-(55000*idx(2027)))),(70000*idx(2027)))*0.0475))+(Math.max(0,(ti-(125000*idx(2027))))*0.0599)))+(Math.max(0,(ti-(1000000*idx(2027))))*((year>=2029)?0.03:((year>=2028)?0.02:0.01))))),
+  SC: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(mfj?((Math.min(Math.max(0,(ti-(0*1))),(30000*1))*0.0199)+(Math.max(0,(ti-(30000*1)))*0.0521)):((Math.min(Math.max(0,(ti-(0*1))),(30000*1))*0.0199)+(Math.max(0,(ti-(30000*1)))*0.0521))),
+  SD: (ti,mfj,idx,sidx,year,draw,gp,gross)=>0,
+  TN: (ti,mfj,idx,sidx,year,draw,gp,gross)=>0,
+  TX: (ti,mfj,idx,sidx,year,draw,gp,gross)=>0,
+  UT: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(ti*0.0445),
+  VT: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(mfj?((((Math.min(Math.max(0,(ti-(0*idx(2025)))),(73000*idx(2025)))*0.0335)+(Math.min(Math.max(0,(ti-(73000*idx(2025)))),(104150*idx(2025)))*0.066))+(Math.min(Math.max(0,(ti-(177150*idx(2025)))),(55900*idx(2025)))*0.076))+(Math.max(0,(ti-(233050*idx(2025))))*0.0875)):((((Math.min(Math.max(0,(ti-(0*idx(2025)))),(45400*idx(2025)))*0.0335)+(Math.min(Math.max(0,(ti-(45400*idx(2025)))),(64650*idx(2025)))*0.066))+(Math.min(Math.max(0,(ti-(110050*idx(2025)))),(119500*idx(2025)))*0.076))+(Math.max(0,(ti-(229550*idx(2025))))*0.0875))),
+  VA: (ti,mfj,idx,sidx,year,draw,gp,gross)=>((((Math.min(Math.max(0,(ti-(0*idx(2025)))),(3000*idx(2025)))*0.02)+(Math.min(Math.max(0,(ti-(3000*idx(2025)))),(2000*idx(2025)))*0.03))+(Math.min(Math.max(0,(ti-(5000*idx(2025)))),(12000*idx(2025)))*0.05))+(Math.max(0,(ti-(17000*idx(2025))))*0.0575)),
+  WA: (ti,mfj,idx,sidx,year,draw,gp,gross)=>Math.max((((0.07*Math.min(Math.max(0,(((draw*gp))-(278000*idx(2025)))),1000000))+(0.099*Math.max(0,((((draw*gp))-(278000*idx(2025)))-1000000))))),((year>=2028)?(0.099*Math.max(0,(((gross+((draw*gp))))-(1000000*Math.pow(((1+sidx)),Math.floor((Math.max(0,(year-2028))/2))))))):0)),
+  WV: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(mfj?(((((Math.min(Math.max(0,(ti-(0*idx(2026)))),(10000*idx(2026)))*0.0211)+(Math.min(Math.max(0,(ti-(10000*idx(2026)))),(15000*idx(2026)))*0.0296))+(Math.min(Math.max(0,(ti-(25000*idx(2026)))),(15000*idx(2026)))*0.0333))+(Math.min(Math.max(0,(ti-(40000*idx(2026)))),(20000*idx(2026)))*0.0444))+(Math.max(0,(ti-(60000*idx(2026))))*0.0458)):(((((Math.min(Math.max(0,(ti-(0*idx(2026)))),(10000*idx(2026)))*0.0211)+(Math.min(Math.max(0,(ti-(10000*idx(2026)))),(15000*idx(2026)))*0.0296))+(Math.min(Math.max(0,(ti-(25000*idx(2026)))),(15000*idx(2026)))*0.0333))+(Math.min(Math.max(0,(ti-(40000*idx(2026)))),(20000*idx(2026)))*0.0444))+(Math.max(0,(ti-(60000*idx(2026))))*0.0458))),
+  WI: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(mfj?((((Math.min(Math.max(0,(ti-(0*idx(2025)))),(22430*idx(2025)))*0.0354)+(Math.min(Math.max(0,(ti-(22430*idx(2025)))),(156720*idx(2025)))*0.0465))+(Math.min(Math.max(0,(ti-(179150*idx(2025)))),(226400*idx(2025)))*0.053))+(Math.max(0,(ti-(405550*idx(2025))))*0.0765)):((((Math.min(Math.max(0,(ti-(0*idx(2025)))),(13810*idx(2025)))*0.0354)+(Math.min(Math.max(0,(ti-(13810*idx(2025)))),(13820*idx(2025)))*0.0465))+(Math.min(Math.max(0,(ti-(27630*idx(2025)))),(276540*idx(2025)))*0.053))+(Math.max(0,(ti-(304170*idx(2025))))*0.0765))),
+  WY: (ti,mfj,idx,sidx,year,draw,gp,gross)=>0,
+  DC: (ti,mfj,idx,sidx,year,draw,gp,gross)=>(((((((Math.min(Math.max(0,(ti-(0*idx(2025)))),(10000*idx(2025)))*0.04)+(Math.min(Math.max(0,(ti-(10000*idx(2025)))),(30000*idx(2025)))*0.06))+(Math.min(Math.max(0,(ti-(40000*idx(2025)))),(20000*idx(2025)))*0.065))+(Math.min(Math.max(0,(ti-(60000*idx(2025)))),(190000*idx(2025)))*0.085))+(Math.min(Math.max(0,(ti-(250000*idx(2025)))),(250000*idx(2025)))*0.0925))+(Math.min(Math.max(0,(ti-(500000*idx(2025)))),(500000*idx(2025)))*0.0975))+(Math.max(0,(ti-(1000000*idx(2025))))*0.1075)),
+  None: ()=>0,
+};
+
+// Retirement cash-flow engine. Pure functions, no DOM. Runs in the page, in a Web Worker and in Node.
+// A year is solved in sequence: balances carry forward, and the tax <-> withdrawal loop inside a year
+// is solved by fixed-point iteration (the source workbook relies on iterative calculation for the same loop).
+
+const YEARS = 20;
+
+const RMD_FACTOR = {72:27.4,73:26.5,74:25.5,75:24.6,76:23.7,77:22.9,78:22,79:21.1,80:20.2,81:19.4,82:18.5,83:17.7,84:16.8,85:16,
+  86:15.2,87:14.4,88:13.7,89:12.9,90:12.2,91:11.5,92:10.8,93:10.1,94:9.5,95:8.9,96:8.4,97:7.8,98:7.3,99:6.8,100:6.4,101:6,
+  102:5.6,103:5.2,104:4.9,105:4.6,106:4.3,107:4.1,108:3.9,109:3.7,110:3.5,111:3.4,112:3.3,113:3.1,114:3,115:2.9,116:2.8,
+  117:2.7,118:2.5,119:2.3,120:2};
+
+// 2027 baseline federal schedules: [top of bracket, tax at bottom of bracket, rate]
+const FED = {
+  MFJ: { tops:[25600,104050,218250,416650,529100,793650], base:[0,2560,11974,37098,84714,120698,213290.5],
+         std:33200, addl:1700, zero15:102100, top15:633600, ss1:32000, ss2:44000, niit:250000, home:500000,
+         amtEx:144700, amtPhase:1031900, obbba:150000,
+         irmaa:[218000,274000,342000,410000,750000] },
+  Single: { tops:[12800,52025,109125,208325,264550,661375], base:[0,1280,5987,18549,42357,60349,199237.75],
+         std:16600, addl:2100, zero15:51050, top15:563200, ss1:25000, ss2:34000, niit:200000, home:250000,
+         amtEx:93000, amtPhase:515950, obbba:75000,
+         irmaa:[109000,137000,171000,205000,500000] },
+};
+const FED_RATES = [0.10,0.12,0.22,0.24,0.32,0.35,0.37];
+const IRMAA_AMT = [0,1148.4,2884.8,4620,6355.2,6936];
+
+function regularTax(ti, P, F) {
+  let lower = 0;
+  for (let i = 0; i < 6; i++) {
+    if (ti <= P.tops[i] * F) return P.base[i] * F + (ti - lower) * FED_RATES[i];
+    lower = P.tops[i] * F;
+  }
+  return P.base[6] * F + (ti - lower) * 0.37;
+}
+function bracketTop(rate, P, F) {
+  const i = FED_RATES.indexOf(rate);
+  return (i >= 0 && i < 6 ? P.tops[i] : 999999) * F;
+}
+function ltcgTax(ti, gain, P, F) {
+  const z = P.zero15 * F, top = P.top15 * F;
+  return 0.15 * Math.max(0, Math.min(ti + gain, top) - Math.max(ti, z)) + 0.2 * Math.max(0, ti + gain - Math.max(ti, top));
+}
+function rothShare(label) {
+  switch (label) {
+    case '100% Cash/Roth': return 1;
+    case '75% Cash/Roth / 25% Brokerage': return 0.75;
+    case '50% / 50%': return 0.5;
+    case '25% Cash/Roth / 75% Brokerage': return 0.25;
+    default: return 0;
+  }
+}
+function rmdStartAge(birthYear) { return birthYear >= 1960 ? 75 : birthYear >= 1951 ? 73 : 71; }
+
+function caTax(x) {
+  // x: {mfj, year, sidx, a1, a2, gross, ssTaxable, ltg, homeGain, dedType, itemized, itemGrowth, t}
+  const k = Math.pow(1 + x.sidx, Math.max(0, x.year - 2026));
+  const fedAgi = Math.max(0, x.gross + x.ltg + x.homeGain);
+  const caAgi = Math.max(0, x.gross - x.ssTaxable + x.ltg + x.homeGain);
+  const std = (x.mfj ? 11800 : 5900) * k;
+  const item = x.itemized > 0 ? x.itemized * Math.pow(1 + x.itemGrowth, x.t) : 0;
+  const ded = x.dedType === 'Standard' ? std : x.dedType === 'Itemized' ? (item > 0 ? item : std) : Math.max(std, item);
+  const ti = Math.max(0, caAgi - ded);
+  const B = x.mfj ? [0,22912,54314,85722,118996,150394,768218,921854,1536426] : [0,11456,27157,42861,59498,75197,384109,460927,768213];
+  const R = [0.01,0.02,0.04,0.06,0.08,0.093,0.103,0.113,0.123];
+  let tax = 0;
+  for (let i = 0; i < 9; i++) {
+    const lo = B[i] * k;
+    tax += i < 8 ? Math.min(Math.max(0, ti - lo), (B[i + 1] - B[i]) * k) * R[i] : Math.max(0, ti - lo) * R[i];
+  }
+  const credit = Math.max(0, 158 * k - 6 * Math.ceil(Math.max(0, fedAgi - (x.mfj ? 504411 : 252203) * 1.034 * k) / 2500));
+  const personal = Math.max(0, credit * (x.mfj ? 2 : 1));
+  const senior = Math.max(0, credit * ((x.a1 >= 65 ? 1 : 0) + (x.mfj && x.a2 >= 65 ? 1 : 0)));
+  return Math.max(0, tax - personal - senior) + Math.max(0, ti - 1000000) * 0.01;
+}
+
+// Build the per-year arrays the engine needs from the flat input object.
+function prepare(inp) {
+  const n = YEARS, grow = (y1, g) => Array.from({ length: n }, (_, t) => (y1 === 0 ? 0 : y1 * Math.pow(1 + g, t)));
+  const net = (1 + inp.inflation) * (1 + inp.spendAdj) - 1;
+  const spend = []; let s = inp.spendYr1;
+  for (let t = 0; t < n; t++) {
+    if (t > 0) s = s * (1 + net);
+    if (inp.spendOverride && inp.spendOverride[t] != null && inp.spendOverride[t] !== '') s = +inp.spendOverride[t];
+    spend.push(s);
+  }
+  const arr = (a) => Array.from({ length: n }, (_, t) => +((a && a[t]) || 0));
+  return {
+    spend,
+    w2: grow(inp.w2, inp.w2G), se: grow(inp.se, inp.seG), k1: grow(inp.k1, inp.k1G),
+    pension: grow(inp.pension, inp.pensionG), stcg: grow(inp.stcg, inp.stcgG), other: grow(inp.otherInc, inp.otherIncG),
+    manual: arr(inp.manual), homeGain: arr(inp.homeGain), homeCash: arr(inp.homeCash), inherit: arr(inp.inherit),
+  };
+}
+
+// returns: array of 20 annual returns (constant for a deterministic scenario, random for Monte Carlo).
+// lite: skip the per-year detail rows (used by Monte Carlo for speed).
+function runPath(inp, returns, prep, lite) {
+  const P = FED[inp.status === 'Single' ? 'Single' : 'MFJ'], mfj = inp.status !== 'Single';
+  prep = prep || prepare(inp);
+  const stateFn = inp.state === 'CA' ? null : (STATE_TAX[inp.state] || STATE_TAX.None);
+  const aH = rothShare(inp.homeAlloc), aI = rothShare(inp.inheritAlloc);
+  const rmdAge1 = rmdStartAge(inp.startYear - inp.age1), rmdAge2 = rmdStartAge(inp.startYear - inp.age2);
+  const rothQualYear = inp.rothEstYear + 5;
+  const basis0 = inp.brokerage * inp.basisPct;
+
+  let ira1 = inp.ira1, ira2 = inp.ira2, roth = inp.roth, brok = inp.brokerage, basis = basis0;
+  let principal = inp.rothContrib + inp.rothConv;
+  let cumGap = 0, totalTax = 0, firstShort = 0;
+  const magiHist = [];
+  const rows = [], totals = new Float64Array(YEARS);
+
+  for (let t = 0; t < YEARS; t++) {
+    const g = returns[t], G = 1 + g;
+    const year = inp.startYear + t, a1 = inp.age1 + t, a2 = inp.age2 === 0 ? 0 : inp.age2 + t;
+    const F = Math.pow(1 + inp.fedIdx, t + Math.max(0, inp.startYear - 2027));
+    const spend = prep.spend[t], se = prep.se[t], w2 = prep.w2[t], stcg = prep.stcg[t];
+    const other = w2 + se + prep.k1[t] + prep.pension[t] + stcg + prep.other[t];
+    const seTax = se <= 0 ? 0 : Math.min(se, Math.max(0, 192300 * F - w2)) * 0.124 + se * 0.029;
+    const seDed = se <= 0 ? 0 : seTax * 0.5;
+    const ss = ((a1 >= inp.ss1Age ? inp.ss1Amt * Math.pow(1 + inp.ssInfl, Math.max(0, a1 - inp.age1)) : 0) +
+      (!mfj || inp.ss2Age === 0 ? 0 : (a2 >= inp.ss2Age ? inp.ss2Amt * Math.pow(1 + inp.ssInfl, Math.max(0, a2 - inp.age2)) : 0))) *
+      (year >= inp.ssCutYear ? 1 - inp.ssCut : 1);
+    const std = P.std * F, itemized = inp.itemized * Math.pow(1 + inp.itemGrowth, t);
+    const n65 = (a1 >= 65 ? 1 : 0) + (mfj && a2 >= 65 ? 1 : 0);
+    const addl = mfj ? ((a1 >= 65 ? 1 : 0) + (a2 >= 65 ? 1 : 0)) * P.addl * F : (a1 >= 65 ? P.addl * F : 0);
+    const dedUsed = inp.dedType === 'Standard' ? std + addl : inp.dedType === 'Itemized' ? itemized : Math.max(std + addl, itemized);
+    const usesItemized = inp.dedType === 'Itemized' || (inp.dedType === 'Greater of Both' && itemized >= std + addl);
+
+    const f1 = RMD_FACTOR[a1], f2 = RMD_FACTOR[a2];
+    const rmd1 = a1 >= rmdAge1 && f1 ? ira1 / f1 : 0;
+    const rmd2 = mfj && a2 >= rmdAge2 && f2 ? ira2 / f2 : 0;
+
+    // IRMAA uses income from two years earlier.
+    const lookback = t === 0 ? inp.magi1 : t === 1 ? inp.magi2 : magiHist[t - 2];
+    const iF = F * (1 + inp.fedIdx);
+    let tier = 5;
+    for (let i = 0; i < 5; i++) if (lookback <= P.irmaa[i] * iF) { tier = i; break; }
+    const irmaa = n65 * IRMAA_AMT[tier] * iF;
+
+    // IRA distribution for the year (RMDs plus any elective Roth conversion).
+    const room = (rate) => Math.max(0, bracketTop(rate, P, F) - Math.max(0, ss * 0.85 + other - dedUsed));
+    const iraStart = ira1 + ira2;
+    const early = t === 0 ? inp.earlyY1 : t === 1 ? inp.earlyY2 : 0;
+    let dist;
+    if (early > 0) dist = early;
+    else {
+      let want;
+      switch (inp.strategy) {
+        case 'Stay Under Bracket': case 'Minimize Lifetime Tax': want = Math.min(room(inp.targetBracket), room(inp.maxBracket)); break;
+        case 'Deplete by RMD Age': {
+          const endAge = t === 0 ? rmdAge1 : (year >= 2034 ? 75 : 73);
+          want = Math.min(iraStart * G / Math.max(1, endAge - inp.age1 - t), room(inp.maxBracket)); break;
+        }
+        case 'Manual Override': want = prep.manual[t]; break;
+        case 'Roth It All': want = t === 0 ? iraStart : 0; break;
+        case 'Roth Conversion Year': want = year === inp.rothConvYear ? iraStart * G : 0; break;
+        default: want = room(inp.targetBracket);
+      }
+      dist = Math.min(iraStart * G, want);
+    }
+    dist = Math.max(rmd1 + rmd2, dist);
+    const conv = Math.max(0, dist - rmd1 - rmd2);
+
+    // IRA balances after RMDs and the conversion, split between owners in proportion to what is left.
+    const r1 = ira1 * G - rmd1, r2 = ira2 * G - rmd2, den = Math.max(0, r1 + r2);
+    const sh1 = den > 0 ? Math.max(0, r1) / den : (ira1 * G > 0 ? 1 : 0);
+    const sh2 = den > 0 ? Math.max(0, r2) / den : (ira2 * G > 0 ? 1 : 0);
+    const allIn = inp.strategy === 'Roth It All';
+    const ira1End = allIn ? 0 : Math.max(0, ira1 * G - rmd1 * G - conv * sh1 * G);
+    const ira2End = allIn ? 0 : Math.max(0, ira2 * G - rmd2 * G - conv * sh2 * G);
+
+    const homeCash = Math.max(0, prep.homeCash[t]), inherit = prep.inherit[t];
+    const rothAdd = conv + homeCash * aH + inherit * aI;
+    const brokAdd = homeCash * (1 - aH) + inherit * (1 - aI);
+    const rothMid = Math.max(0, (roth + rothAdd) * G);
+    const princBefore = Math.min(rothMid, Math.max(0, principal + rothAdd));
+    const rothAvail = Math.max(0, year >= rothQualYear && a1 >= 59.5 ? rothMid : princBefore);
+    const brokAvail = Math.max(0, brok * G + brokAdd * G + (rmd1 + rmd2) * G - stcg * G);
+    const gp = brok > 0 ? Math.max(0, (brok - basis) / brok) : 0;
+    const homeGain = Math.max(0, prep.homeGain[t] - P.home);
+    const z15 = P.zero15 * F, top15 = P.top15 * F;
+
+    // Solve the within-year loop: taxes depend on the brokerage draw, and the draw depends on taxes.
+    let draw = 0, rothDraw = 0, o = null;
+    for (let it = 0; it < 200; it++) {
+      const ltg = Math.max(0, draw * gp);
+      const prov = dist + other + draw * gp + homeGain + ss * 0.5;
+      const ssTaxable = ss <= 0 ? 0 : Math.min(ss * 0.85,
+        Math.min(ss * 0.5, Math.max(0, Math.min(prov - P.ss1, P.ss2 - P.ss1)) * 0.5) + Math.max(0, prov - P.ss2) * 0.85);
+      const gross = ssTaxable + dist + other - seDed;
+      const senior = year >= 2025 && year <= inp.obbbaLast
+        ? Math.max(0, (a1 >= 65 ? 6000 : 0) + (mfj && a2 >= 65 ? 6000 : 0) - Math.max(0, gross - P.obbba) * 0.06) : 0;
+      const ti = Math.max(0, gross - dedUsed - senior);
+      const reg = Math.max(0, regularTax(ti, P, F));
+      const ltcg = ltcgTax(ti, ltg, P, F);
+      const homeTax = Math.max(0, ltcgTax(ti, ltg + homeGain, P, F) - ltcg);
+      const niit = Math.max(0, Math.min(Math.max(0, draw * gp + stcg + homeGain), Math.max(0, gross + draw * gp + homeGain - P.niit)) * 0.038);
+      const stateTax = inp.state === 'CA'
+        ? caTax({ mfj, year, sidx: inp.stateIdx, a1, a2, gross, ssTaxable, ltg, homeGain, dedType: inp.dedType, itemized: inp.itemized, itemGrowth: inp.itemGrowth, t })
+        : stateFn(ti, mfj, (y) => Math.pow(1 + inp.stateIdx, t + Math.max(0, inp.startYear - y)), inp.stateIdx, year, draw, gp, gross);
+
+      // Alternative minimum tax
+      const salt = usesItemized ? Math.min(Math.max(0, stateTax), Math.max(0, itemized),
+        year <= 2029 ? Math.max(10000, 40804 * Math.pow(1.01, year - 2027) - 0.3 * Math.max(0, gross - 510050 * Math.pow(1.01, year - 2027))) : 10000) : 0;
+      const amtOrd0 = Math.max(0, usesItemized ? gross - itemized + salt : gross);
+      const amtGain = ltg + homeGain, amti = amtOrd0 + amtGain;
+      const amtEx = Math.max(0, P.amtEx * F - 0.5 * Math.max(0, amti - P.amtPhase * F));
+      const amtTi = Math.max(0, amti - amtEx), amtOrd = Math.max(0, amtTi - amtGain);
+      const amtOrdTax = amtOrd <= 252500 * F ? amtOrd * 0.26 : 252500 * F * 0.26 + (amtOrd - 252500 * F) * 0.28;
+      const amtGainTax = amtTi <= z15 ? 0 : amtOrd <= z15 ? Math.min(amtGain, amtTi - z15) * 0.15
+        : amtTi <= top15 ? amtGain * 0.15 : amtOrd <= top15 ? (top15 - amtOrd) * 0.15 + (amtTi - top15) * 0.2 : amtGain * 0.2;
+      const amt = Math.max(0, amtOrdTax + amtGainTax - (reg + ltcg + homeTax));
+      const fed = reg + amt;
+
+      const gap = Math.max(0, spend + seTax + fed + homeTax + niit + irmaa + stateTax - ss - other);
+      let need;
+      if (inp.gapFunding === 'Roth First') { rothDraw = Math.min(rothAvail, gap); need = Math.max(0, gap - rothDraw); }
+      else if (inp.gapFunding === 'Brokerage First') { rothDraw = Math.min(rothAvail, Math.max(0, gap - (draw - ltcg))); need = gap; }
+      else {
+        const share = rothAvail + brokAvail > 0 ? rothAvail / (rothAvail + brokAvail) : 0;
+        rothDraw = Math.min(rothAvail, gap * share); need = Math.max(0, gap - rothDraw);
+      }
+      // Gross the net need up for the capital-gains tax the sale itself triggers.
+      let gross_ = 0;
+      if (need > 0) {
+        if (gp <= 0) gross_ = need;
+        else if (ti >= top15) gross_ = need / (1 - 0.2 * gp);
+        else if (ti >= z15) gross_ = need <= ((top15 - ti) / gp) * (1 - 0.15 * gp) ? need / (1 - 0.15 * gp)
+          : Math.max(0, (need - 0.05 * (top15 - ti)) / (1 - 0.2 * gp));
+        else gross_ = need <= (z15 - ti) / gp ? need
+          : need <= ((top15 - ti) / gp) * (1 - 0.15 * gp) + 0.15 * (z15 - ti) ? Math.max(0, (need - 0.15 * (z15 - ti)) / (1 - 0.15 * gp))
+          : Math.max(0, (need + 0.15 * (top15 - z15) - 0.2 * (top15 - ti)) / (1 - 0.2 * gp));
+      }
+      const newDraw = Math.min(brokAvail, gross_);
+      o = { ssTaxable, gross, senior, ti, reg, ltcg, homeTax, niit, stateTax, amt, fed, gap };
+      const delta = Math.abs(newDraw - draw);
+      draw = it > 60 ? 0.5 * (draw + newDraw) : newDraw; // damp if the loop has not settled
+      if (delta < 1e-7 && it > 0) {
+        if (inp.gapFunding === 'Brokerage First') rothDraw = Math.min(rothAvail, Math.max(0, gap - (draw - ltcg)));
+        break;
+      }
+    }
+
+    const unfunded = Math.max(0, o.gap - rothDraw - Math.max(0, draw - o.ltcg));
+    cumGap += unfunded;
+    if (!firstShort && unfunded > 0.01) firstShort = t + 1;
+    const rothEnd = Math.max(0, (roth + rothAdd) * G - rothDraw);
+    const brokEnd = Math.max(0, brok * G + brokAdd * G + (rmd1 + rmd2) * G - draw - stcg * G);
+    const basisEnd = Math.max(0, basis + brokAdd + rmd1 + rmd2 - draw * (1 - gp) - stcg);
+    const taxes = seTax + o.fed + o.ltcg + o.homeTax + o.niit + irmaa + o.stateTax;
+    totalTax += taxes;
+    magiHist.push(o.gross + draw * gp + Math.max(0, prep.homeGain[t] - P.home));
+    const total = ira1End + ira2End + rothEnd + brokEnd;
+    totals[t] = total;
+
+    if (!lite) rows.push({
+      t, year, a1, a2, spend, seTax, fed: o.fed, amt: o.amt, ltcg: o.ltcg, homeTax: o.homeTax, niit: o.niit, irmaa, stateTax: o.stateTax,
+      taxes, needs: spend + taxes, ss, other, gap: o.gap, rothDraw, brokDraw: draw, unfunded, cumGap,
+      ira1: ira1End, ira2: ira2End, ira: ira1End + ira2End, roth: rothEnd, brok: brokEnd, basis: basisEnd, gp, total,
+      dist, conv, rmd1, rmd2, rmd: rmd1 + rmd2, ssTaxable: o.ssTaxable, gross: o.gross, ti: o.ti, dedUsed, senior: o.senior,
+      effRate: o.gross > 0 ? taxes / o.gross : 0, rothAvail, ret: g,
+      marginal: FED_RATES[Math.min(6, P.tops.findIndex((x) => o.ti <= x * F) < 0 ? 6 : P.tops.findIndex((x) => o.ti <= x * F))],
+    });
+
+    ira1 = ira1End; ira2 = ira2End; roth = rothEnd; brok = brokEnd; basis = basisEnd;
+    principal = Math.max(0, princBefore - rothDraw);
+  }
+  return { rows, totals, cumGap, totalTax, firstShort, success: cumGap < 0.01, end: totals[YEARS - 1], endIra: ira1 + ira2, endRoth: roth, endBrok: brok };
+}
+
+function runScenario(inp, growth, prep) {
+  return runPath(inp, new Array(YEARS).fill(growth), prep, false);
+}
+function runAll(inp) {
+  const prep = prepare(inp);
+  return [inp.growth1, inp.growth2, inp.growth3].map((g) => runScenario(inp, g, prep));
+}
+
+// Seeded RNG (mulberry32) so a run can be repeated exactly.
+function rng(seed) {
+  let a = seed >>> 0;
+  return () => { a = (a + 0x6D2B79F5) >>> 0; let x = a; x = Math.imul(x ^ (x >>> 15), x | 1); x ^= x + Math.imul(x ^ (x >>> 7), x | 61); return ((x ^ (x >>> 14)) >>> 0) / 4294967296; };
+}
+function percentile(sorted, p) { // inclusive percentile, like PERCENTILE.INC
+  const n = sorted.length; if (!n) return 0;
+  const k = (n - 1) * p, f = Math.floor(k), c = Math.min(n - 1, f + 1);
+  return sorted[f] + (sorted[c] - sorted[f]) * (k - f);
+}
+
+// Monte Carlo: lognormal annual returns with arithmetic mean = scenario growth and st. dev. = volatility.
+// One normal shock per path-year is shared by all three scenarios (common random numbers).
+function monteCarlo(inp, paths, seed, onProgress) {
+  const prep = prepare(inp), means = [inp.growth1, inp.growth2, inp.growth3];
+  const par = means.map((m) => { const s = Math.sqrt(Math.log(1 + Math.pow(inp.volatility / (1 + m), 2))); return { s, mu: Math.log(1 + m) - 0.5 * s * s }; });
+  const rand = rng(seed || 20261109);
+  const tot = means.map(() => Array.from({ length: YEARS }, () => new Float64Array(paths)));
+  const succ = [0, 0, 0], failYearSum = [0, 0, 0], taxSum = [0, 0, 0], shortYears = means.map(() => new Uint32Array(YEARS + 1));
+  const rets = means.map(() => new Array(YEARS));
+  for (let p = 0; p < paths; p++) {
+    for (let y = 0; y < YEARS; y++) {
+      let u1 = rand(); if (u1 < 1e-7) u1 = 1e-7; const u2 = rand();
+      const zed = Math.sqrt(-2 * Math.log(u1)) * Math.cos(6.28318530717959 * u2);
+      for (let s = 0; s < 3; s++) rets[s][y] = Math.exp(par[s].mu + par[s].s * zed) - 1;
+    }
+    for (let s = 0; s < 3; s++) {
+      const r = runPath(inp, rets[s], prep, true);
+      for (let y = 0; y < YEARS; y++) tot[s][y][p] = r.totals[y];
+      if (r.success) succ[s]++; else { failYearSum[s] += r.firstShort; shortYears[s][r.firstShort]++; }
+      taxSum[s] += r.totalTax;
+    }
+    if (onProgress && (p + 1) % 250 === 0) onProgress((p + 1) / paths);
+  }
+  const PCT = [0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95];
+  return means.map((m, s) => {
+    const bands = PCT.map(() => new Array(YEARS));
+    for (let y = 0; y < YEARS; y++) {
+      const sorted = Float64Array.from(tot[s][y]).sort();
+      PCT.forEach((q, i) => { bands[i][y] = percentile(sorted, q); });
+    }
+    const fails = paths - succ[s];
+    return { mean: m, paths, success: succ[s] / paths, successCount: succ[s], fails,
+      avgFailYear: fails ? failYearSum[s] / fails : 0, shortYears: Array.from(shortYears[s]),
+      avgTax: taxSum[s] / paths, pct: PCT, bands };
+  });
+}
+
+if (typeof module !== 'undefined') module.exports = { YEARS, prepare, runPath, runScenario, runAll, monteCarlo, FED, FED_RATES };
+
+</script>
+<script>
+'use strict';
+/* ================= defaults and helpers ================= */
+const STATES = 'AL,AK,AZ,AR,CA,CO,CT,DE,FL,GA,HI,ID,IL,IN,IA,KS,KY,LA,ME,MD,MA,MI,MN,MS,MO,MT,NE,NV,NH,NJ,NM,NY,NC,ND,OH,OK,OR,PA,RI,SC,SD,TN,TX,UT,VT,VA,WA,WV,WI,WY,DC'.split(',');
+const STRATEGIES = [
+  ['Stay Under Bracket', 'Fill the target tax bracket every year: required withdrawals first, then Roth conversions up to the top of the bracket.'],
+  ['Deplete by RMD Age', 'Spread withdrawals evenly so the IRAs are empty by the age required minimum distributions begin.'],
+  ['Minimize Lifetime Tax', 'Fill the target bracket each year, never going past the maximum bracket. In this model it behaves like Stay Under Bracket.'],
+  ['Manual Override', 'You type the IRA withdrawal for each year.'],
+  ['Roth Conversion Year', 'Convert the entire IRA to Roth in one chosen year.'],
+  ['Roth It All', 'Convert the entire IRA to Roth in year one.'],
+];
+const ALLOCS = ['100% Cash/Roth', '75% Cash/Roth / 25% Brokerage', '50% / 50%', '25% Cash/Roth / 75% Brokerage', '100% Brokerage'];
+const BRACKETS = [0.10, 0.12, 0.22, 0.24, 0.32, 0.35, 0.37];
+const DEFAULTS = {
+  status: 'MFJ', state: 'CA', startYear: 2028, age1: 67, age2: 67,
+  ss1Age: 67, ss1Amt: 42000, ss2Age: 67, ss2Amt: 21000, ssCut: 0, ssCutYear: 9999,
+  ira1: 1500000, ira2: 500000, roth: 5000, brokerage: 1000000, basisPct: 0.5,
+  spendYr1: 180000, inflation: 0.03, spendAdj: 0, spendOverride: Array(20).fill(null),
+  w2: 0, w2G: 0, se: 0, seG: 0, k1: 0, k1G: 0, pension: 0, pensionG: 0, stcg: 0, stcgG: 0, otherInc: 0, otherIncG: 0,
+  growth1: 0.06, growth2: 0.04, growth3: 0.02, ssInfl: 0.03, fedIdx: 0.03, stateIdx: 0.03, volatility: 0.08,
+  dedType: 'Itemized', itemized: 50000, itemGrowth: 0.03, obbbaLast: 2028,
+  strategy: 'Stay Under Bracket', targetBracket: 0.24, maxBracket: 0.24, rothConvYear: 2028, earlyY1: 0, earlyY2: 0,
+  gapFunding: 'Roth First', manual: Array(20).fill(null), magi1: 300000, magi2: 300000,
+  events: [], homeAlloc: '100% Brokerage', inheritAlloc: '100% Brokerage',
+  rothEstYear: 2024, rothContrib: 0, rothConv: 5000,
+};
+const $ = (s, r) => (r || document).querySelector(s);
+const el = (tag, attrs, ...kids) => {
+  const e = document.createElement(tag);
+  for (const k in attrs || {}) { if (k === 'class') e.className = attrs[k]; else if (k === 'html') e.innerHTML = attrs[k]; else if (k.startsWith('on')) e.addEventListener(k.slice(2), attrs[k]); else if (attrs[k] != null) e.setAttribute(k, attrs[k]); }
+  for (const k of kids.flat()) if (k != null) e.append(k);
+  return e;
+};
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const money = (x) => (x < -0.5 ? '−$' : '$') + Math.round(Math.abs(x)).toLocaleString('en-US');
+const short = (x) => { const a = Math.abs(x), s = x < -0.5 ? '−' : ''; return a >= 9.995e6 ? s + '$' + (a / 1e6).toFixed(1) + 'M' : a >= 1e6 ? s + '$' + (a / 1e6).toFixed(2) + 'M' : a >= 1e3 ? s + '$' + Math.round(a / 1e3) + 'K' : s + '$' + Math.round(a); };
+const pct = (x, d) => (x * 100).toFixed(d == null ? 1 : d) + '%';
+const pctTrim = (x) => (+((x * 100).toFixed(2))) + '%';
+const sum = (a) => a.reduce((p, c) => p + c, 0);
+
+let plan = structuredClone(DEFAULTS);
+const ui = { scen: 0, paths: 10000, seed: 20261109, edited: false };
+let det = null, mc = null, mcBusy = false;
+
+function toEngine(p) {
+  const e = Object.assign({}, p);
+  if (p.status === 'Single') { e.age2 = 0; e.ss2Age = 0; e.ss2Amt = 0; e.ira2 = 0; }
+  e.homeGain = Array(20).fill(0); e.homeCash = Array(20).fill(0); e.inherit = Array(20).fill(0);
+  for (const ev of p.events) {
+    const t = ev.year - p.startYear; if (t < 0 || t > 19) continue;
+    if (ev.kind === 'home') { e.homeGain[t] += +ev.gain || 0; e.homeCash[t] += +ev.cash || 0; } else e.inherit[t] += +ev.amount || 0;
+  }
+  e.manual = p.manual.map((x) => +x || 0);
+  e.rothConvYear = p.rothConvYear || p.startYear;
+  return e;
+}
+
+/* ================= inputs pane ================= */
+const SECTIONS = [
+  { id: 'household', title: 'Household', open: true, sum: (p) => `${p.status === 'MFJ' ? 'Married' : 'Single'} · ${p.state} · ${p.startYear}`, fields: [
+    { k: 'status', type: 'seg', label: 'Filing status', wide: true, opts: [['MFJ', 'Married, filing jointly'], ['Single', 'Single']] },
+    { k: 'state', type: 'select', label: 'State', opts: STATES.map((s) => [s, s]).concat([['None', 'No state tax']]), hint: 'Used for the state income-tax estimate. California has its own detailed calculation.' },
+    { k: 'startYear', type: 'int', label: 'Retirement starts', min: 2027, max: 2100, hint: 'First calendar year of the plan. Tax tables start from a 2027 baseline and are indexed forward.' },
+    { k: 'age1', type: 'int', label: 'Your age that year', min: 1, max: 110 },
+    { k: 'age2', type: 'int', label: 'Spouse’s age that year', min: 0, max: 110, show: (p) => p.status === 'MFJ' },
+  ] },
+  { id: 'savings', title: 'Savings', open: true, sum: (p) => short(p.ira1 + (p.status === 'MFJ' ? p.ira2 : 0) + p.roth + p.brokerage), fields: [
+    { k: 'ira1', type: 'money', label: 'Your pre-tax IRA / 401(k)', hint: 'Traditional IRA, 401(k), 403(b), SEP. Withdrawals are taxed as ordinary income.' },
+    { k: 'ira2', type: 'money', label: 'Spouse’s pre-tax IRA / 401(k)', show: (p) => p.status === 'MFJ', hint: 'Each spouse’s required minimum distribution is worked out separately.' },
+    { k: 'roth', type: 'money', label: 'Roth and cash', hint: 'Household Roth IRA and cash-equivalent balance. Draws are tax-free.' },
+    { k: 'brokerage', type: 'money', label: 'Taxable brokerage', hint: 'Current market value of taxable investments.' },
+    { k: 'basisPct', type: 'select', label: 'Brokerage cost basis', wide: true, opts: [0.9, 0.75, 0.67, 0.5, 0.33, 0.25, 0.1].map((v) => [v, Math.round(v * 100) + '% of today’s value']), num: true, hint: 'What you originally paid, as a share of today’s value. The rest is gain, taxed when sold.' },
+  ] },
+  { id: 'spending', title: 'Spending', open: true, sum: (p) => `${short(p.spendYr1)} a year`, fields: [
+    { k: 'spendYr1', type: 'money', label: 'Year-one spending, before taxes', wide: true, slider: { min: 40000, max: 500000, step: 5000 } },
+    { k: 'inflation', type: 'pct', label: 'Inflation on spending' },
+    { k: 'spendAdj', type: 'pct', label: 'Real change per year', neg: true, hint: 'On top of inflation. Use −1 or −2 if you expect to spend less as you age.' },
+    { custom: 'spendGrid' },
+  ] },
+  { id: 'ss', title: 'Social Security', sum: (p) => `${short(p.ss1Amt + (p.status === 'MFJ' ? p.ss2Amt : 0))} a year`, fields: [
+    { k: 'ss1Age', type: 'int', label: 'You claim at age', min: 0, max: 110 },
+    { k: 'ss1Amt', type: 'money', label: 'Your annual benefit', hint: 'In retirement-year dollars: what you would receive in the first year of the plan. It grows with the Social Security inflation rate.' },
+    { k: 'ss2Age', type: 'int', label: 'Spouse claims at age', min: 0, max: 110, show: (p) => p.status === 'MFJ', hint: 'Enter 0 for no spousal benefit.' },
+    { k: 'ss2Amt', type: 'money', label: 'Spouse’s annual benefit', show: (p) => p.status === 'MFJ' },
+    { k: 'ssCut', type: 'pct', label: 'Stress test: benefit cut', hint: 'Optional. Enter 23 to test a 23% cut. Leave 0 for no cut.' },
+    { k: 'ssCutYear', type: 'int', label: 'Cut begins in', min: 2027, max: 9999, hint: 'First year of the cut. 9999 means never.' },
+  ] },
+  { id: 'income', title: 'Other income', sum: (p) => { const t = p.w2 + p.se + p.k1 + p.pension + p.stcg + p.otherInc; return t ? short(t) + ' in year one' : 'None'; }, fields: [
+    { sub: 'Year-one amount and its yearly growth. All of it is taxed as ordinary income.' },
+    { k: 'pension', type: 'money', label: 'Pension or annuity' }, { k: 'pensionG', type: 'pct', label: 'Growth', neg: true },
+    { k: 'w2', type: 'money', label: 'W-2 wages' }, { k: 'w2G', type: 'pct', label: 'Growth', neg: true },
+    { k: 'se', type: 'money', label: '1099 / self-employment', hint: 'Net self-employment income. Self-employment tax is added.' }, { k: 'seG', type: 'pct', label: 'Growth', neg: true },
+    { k: 'k1', type: 'money', label: 'K-1 / partnership' }, { k: 'k1G', type: 'pct', label: 'Growth', neg: true },
+    { k: 'stcg', type: 'money', label: 'Short-term gains', hint: 'Taxed as ordinary income and taken out of the brokerage account.' }, { k: 'stcgG', type: 'pct', label: 'Growth', neg: true },
+    { k: 'otherInc', type: 'money', label: 'Other taxable income' }, { k: 'otherIncG', type: 'pct', label: 'Growth', neg: true },
+  ] },
+  { id: 'strategy', title: 'IRA and Roth strategy', open: true, sum: (p) => p.strategy, fields: [
+    { k: 'strategy', type: 'select', label: 'IRA withdrawal and conversion rule', wide: true, opts: STRATEGIES.map((s) => [s[0], s[0]]), dyn: (p) => STRATEGIES.find((s) => s[0] === p.strategy)[1] },
+    { k: 'targetBracket', type: 'select', label: 'Target bracket', num: true, opts: BRACKETS.map((b) => [b, Math.round(b * 100) + '%']), show: (p) => /Stay|Minimize/.test(p.strategy) },
+    { k: 'maxBracket', type: 'select', label: 'Maximum bracket', num: true, opts: BRACKETS.map((b) => [b, Math.round(b * 100) + '%']), show: (p) => /Stay|Minimize|Deplete/.test(p.strategy), hint: 'The strategy will not push taxable income past this bracket on purpose.' },
+    { k: 'rothConvYear', type: 'int', label: 'Convert everything in', min: 2027, max: 2120, show: (p) => p.strategy === 'Roth Conversion Year' },
+    { custom: 'manualGrid' },
+    { k: 'gapFunding', type: 'seg', label: 'To cover a shortfall, draw from', wide: true, opts: [['Roth First', 'Roth first'], ['Brokerage First', 'Brokerage first'], ['Pro-Rata', 'Both, pro rata']] },
+    { k: 'earlyY1', type: 'money', label: 'Fixed IRA withdrawal, year 1', hint: 'Optional. A positive amount replaces the strategy for that year.' },
+    { k: 'earlyY2', type: 'money', label: 'Fixed IRA withdrawal, year 2' },
+    { k: 'magi1', type: 'money', label: (p) => `Income (MAGI) in ${p.startYear - 2}`, hint: 'Medicare sets premium surcharges (IRMAA) from income two years back.' },
+    { k: 'magi2', type: 'money', label: (p) => `Income (MAGI) in ${p.startYear - 1}` },
+  ] },
+  { id: 'growth', title: 'Growth and inflation', sum: (p) => `${pctTrim(p.growth1)} / ${pctTrim(p.growth2)} / ${pctTrim(p.growth3)}`, fields: [
+    { k: 'growth1', type: 'pct', label: 'Scenario 1 return', slider: { min: 0, max: 0.12, step: 0.0025 }, wide: true },
+    { k: 'growth2', type: 'pct', label: 'Scenario 2 return', slider: { min: 0, max: 0.12, step: 0.0025 }, wide: true },
+    { k: 'growth3', type: 'pct', label: 'Scenario 3 return', slider: { min: 0, max: 0.12, step: 0.0025 }, wide: true },
+    { k: 'volatility', type: 'pct', label: 'Market volatility', min: 0.01, max: 0.3, hint: 'Yearly standard deviation used by the market simulation. 8% suits a balanced portfolio; all-stock is closer to 15–18%.' },
+    { k: 'ssInfl', type: 'pct', label: 'Social Security inflation' },
+    { k: 'fedIdx', type: 'pct', label: 'Federal bracket indexing', hint: 'Yearly growth of federal brackets, deductions and thresholds after 2027.' },
+    { k: 'stateIdx', type: 'pct', label: 'State bracket indexing' },
+  ] },
+  { id: 'deductions', title: 'Deductions', sum: (p) => p.dedType === 'Standard' ? 'Standard' : `${p.dedType} · ${short(p.itemized)}`, fields: [
+    { k: 'dedType', type: 'seg', label: 'Deduction', wide: true, opts: [['Standard', 'Standard'], ['Itemized', 'Itemized'], ['Greater of Both', 'Larger of the two']] },
+    { k: 'itemized', type: 'money', label: 'Itemized, year one', show: (p) => p.dedType !== 'Standard', hint: 'State and local tax, mortgage interest, charity and so on.' },
+    { k: 'itemGrowth', type: 'pct', label: 'Growth', show: (p) => p.dedType !== 'Standard' },
+    { k: 'obbbaLast', type: 'int', label: 'Senior deduction ends after', min: 2025, max: 2100, hint: 'The extra $6,000 per person deduction for age 65+ runs through 2028 under current law.' },
+  ] },
+  { id: 'events', title: 'Home sale and windfalls', sum: (p) => p.events.length ? `${p.events.length} event${p.events.length > 1 ? 's' : ''}` : 'None', fields: [
+    { custom: 'events' },
+    { k: 'homeAlloc', type: 'select', label: 'Home-sale cash goes to', wide: true, opts: ALLOCS.map((a) => [a, a.replace('Cash/Roth', 'cash').replace('Brokerage', 'brokerage')]) },
+    { k: 'inheritAlloc', type: 'select', label: 'Inheritance and other cash goes to', wide: true, opts: ALLOCS.map((a) => [a, a.replace('Cash/Roth', 'cash').replace('Brokerage', 'brokerage')]) },
+  ] },
+  { id: 'roth', title: 'Roth account details', sum: (p) => `Opened ${p.rothEstYear}`, fields: [
+    { k: 'rothEstYear', type: 'int', label: 'First Roth opened in', min: 1998, max: 2100, hint: 'Earnings come out tax-free once the account is five tax years old and you are 59½. Before that, only what was put in can be drawn.' },
+    { k: 'rothContrib', type: 'money', label: 'Contributed so far' },
+    { k: 'rothConv', type: 'money', label: 'Converted so far' },
+  ] },
+];
+const refreshers = [];
+function numFmt(def, v) {
+  if (v == null || v === '') return '';
+  if (def.type === 'money') return Math.round(v).toLocaleString('en-US');
+  if (def.type === 'pct') return String(+((v * 100).toFixed(3)));
+  return String(v);
+}
+function numParse(def, s) {
+  let v = parseFloat(String(s).replace(/[^0-9.\-−]/g, '').replace('−', '-'));
+  if (!isFinite(v)) v = 0;
+  if (!def.neg && def.type !== 'int' && v < 0) v = 0;
+  if (def.type === 'pct') v = v / 100;
+  if (def.type === 'int') v = Math.round(v);
+  if (def.min != null && v < def.min) v = def.min;
+  if (def.max != null && v > def.max) v = def.max;
+  return v;
+}
+function buildField(def) {
+  if (def.sub) return el('p', { class: 'sub' }, def.sub);
+  if (def.custom) return CUSTOM[def.custom]();
+  const id = 'f-' + def.k, wrap = el('div', { class: 'f' + (def.wide ? ' wide' : '') });
+  const labText = el('span');
+  const lab = el(def.type === 'seg' ? 'div' : 'label', { class: 'lab', for: def.type === 'seg' ? null : id }, labText);
+  let hintEl = null;
+  if (def.hint || def.dyn) {
+    hintEl = el('div', { class: 'hint' }, def.hint || '');
+    if (def.dyn) wrap.classList.add('show-hint');
+    else lab.append(el('button', { class: 'q', type: 'button', 'aria-label': 'Explain', onclick: () => wrap.classList.toggle('show-hint') }, '?'));
+  }
+  wrap.append(lab);
+  let sync;
+  if (def.type === 'seg') {
+    const seg = el('div', { class: 'seg', role: 'group' });
+    def.opts.forEach(([v, t]) => seg.append(el('button', { type: 'button', 'data-v': v, onclick: () => { plan[def.k] = v; changed(); } }, t)));
+    wrap.append(seg);
+    sync = () => seg.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === String(plan[def.k]))));
+  } else if (def.type === 'select') {
+    const sel = el('select', { class: 'sel', id, onchange: () => { plan[def.k] = def.num ? +sel.value : sel.value; changed(); } });
+    def.opts.forEach(([v, t]) => sel.append(el('option', { value: v }, t)));
+    wrap.append(sel);
+    sync = () => { sel.value = String(plan[def.k]); };
+  } else {
+    const input = el('input', { id, type: 'text', inputmode: def.type === 'int' ? 'numeric' : 'decimal', autocomplete: 'off' });
+    const box = el('div', { class: 'inp' }, def.type === 'money' ? el('span', {}, '$') : null, input, def.type === 'pct' ? el('span', { class: 'suf' }, '%') : null);
+    wrap.append(box);
+    let range = null;
+    const commit = (reformat) => {
+      const raw = input.value.trim();
+      if (!reformat && (raw === '' || raw === '-' || raw === '−' || /\.$/.test(raw))) return;
+      plan[def.k] = numParse(def, raw);
+      if (range) range.value = plan[def.k];
+      if (reformat) input.value = numFmt(def, plan[def.k]);
+      changed(input);
+    };
+    input.addEventListener('input', () => commit(false));
+    input.addEventListener('blur', () => commit(true));
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
+    if (def.slider) {
+      range = el('input', { type: 'range', min: def.slider.min, max: def.slider.max, step: def.slider.step, 'aria-label': typeof def.label === 'string' ? def.label : def.k, id: id + '-range' });
+      range.addEventListener('input', () => { plan[def.k] = +range.value; input.value = numFmt(def, plan[def.k]); changed(input); });
+      wrap.append(range);
+    }
+    sync = () => { if (document.activeElement !== input) input.value = numFmt(def, plan[def.k]); if (range) range.value = plan[def.k]; };
+  }
+  if (hintEl) wrap.append(hintEl);
+  refreshers.push(() => {
+    labText.textContent = typeof def.label === 'function' ? def.label(plan) : def.label;
+    wrap.style.display = def.show && !def.show(plan) ? 'none' : '';
+    if (def.dyn) hintEl.textContent = def.dyn(plan);
+    sync();
+  });
+  return wrap;
+}
+const CUSTOM = {
+  spendGrid() { return yearGrid('spendOverride', 'Set specific years', 'Leave a year blank to use the formula. A typed year becomes the new base for the years after it.', () => prepare(toEngine(Object.assign({}, plan, { spendOverride: null }))).spend, () => true); },
+  manualGrid() { return yearGrid('manual', 'IRA withdrawal by year', 'Total withdrawn from the IRAs each year. Required minimums still apply. Blank means $0.', () => Array(20).fill(0), (p) => p.strategy === 'Manual Override', true); },
+  events() {
+    const box = el('div', { class: 'events' });
+    const draw = () => {
+      box.innerHTML = '';
+      plan.events.forEach((ev, i) => {
+        const yearSel = el('select', { class: 'sel', 'aria-label': 'Year', onchange: () => { ev.year = +yearSel.value; changed(); } });
+        for (let t = 0; t < 20; t++) yearSel.append(el('option', { value: plan.startYear + t }, String(plan.startYear + t)));
+        yearSel.value = String(Math.min(plan.startYear + 19, Math.max(plan.startYear, ev.year)));
+        const kind = el('select', { class: 'sel', 'aria-label': 'Type', onchange: () => { ev.kind = kind.value; changed(); draw(); } }, el('option', { value: 'home' }, 'Home sale'), el('option', { value: 'cash' }, 'Inheritance / other cash'));
+        kind.value = ev.kind;
+        const m = (key, label, neg) => { const inp = el('input', { type: 'text', inputmode: 'decimal', value: numFmt({ type: 'money' }, ev[key] || 0), 'aria-label': label }); const d = { type: 'money', neg };
+          inp.addEventListener('input', () => { ev[key] = numParse(d, inp.value); changed(inp); }); inp.addEventListener('blur', () => { inp.value = (ev[key] < 0 ? '-' : '') + numFmt(d, Math.abs(ev[key] || 0)); });
+          return el('div', { class: 'f' }, el('span', { class: 'lab' }, label), el('div', { class: 'inp' }, el('span', {}, '$'), inp)); };
+        box.append(el('div', { class: 'event' },
+          el('div', { class: 'row' }, kind, yearSel, el('button', { class: 'btn small', type: 'button', onclick: () => { plan.events.splice(i, 1); changed(); draw(); } }, 'Remove')),
+          ev.kind === 'home' ? [m('gain', 'Gain on sale'), m('cash', 'Net cash received')] : [el('div', { class: 'f wide' }, m('amount', 'Amount (negative = outflow)', true))]));
+      });
+      box.append(el('button', { class: 'btn', type: 'button', onclick: () => { plan.events.push({ kind: 'home', year: plan.startYear + 2, gain: 0, cash: 0, amount: 0 }); changed(); draw(); } }, '+ Add a home sale or windfall'));
+      if (plan.events.some((e) => e.kind === 'home')) box.append(el('p', { class: 'sub' }, 'Gain is the profit before the home-sale exclusion ($500,000 married, $250,000 single). Net cash is what lands in your accounts.'));
+    };
+    refreshers.push(() => { if (!box.contains(document.activeElement)) draw(); });
+    return box;
+  },
+};
+function yearGrid(key, title, note, placeholders, show, alwaysOpen) {
+  const grid = el('div', { class: 'grid20' }), inputs = [];
+  for (let t = 0; t < 20; t++) {
+    const inp = el('input', { type: 'text', inputmode: 'decimal', 'aria-label': title + ' year ' + (t + 1), id: `g-${key}-${t}` });
+    inp.addEventListener('input', () => { const s = inp.value.trim(); plan[key][t] = s === '' ? null : numParse({ type: 'money' }, s); changed(inp); });
+    inp.addEventListener('blur', () => { inp.value = plan[key][t] == null ? '' : numFmt({ type: 'money' }, plan[key][t]); });
+    const cap = el('span');
+    grid.append(el('div', { class: 'cell' }, cap, inp)); inputs.push([inp, cap]);
+  }
+  const body = el('div', { class: 'f wide' }, el('p', { class: 'sub' }, note), grid);
+  const det = alwaysOpen ? el('div', { class: 'f wide' }, el('span', { class: 'lab' }, title), body) : el('details', { class: 'f wide' }, el('summary', { style: 'cursor:pointer;font-size:13.5px;font-weight:500;color:var(--accent)' }, title), body);
+  refreshers.push(() => {
+    det.style.display = show(plan) ? '' : 'none';
+    const ph = placeholders();
+    inputs.forEach(([inp, cap], t) => { cap.textContent = plan.startYear + t; inp.placeholder = Math.round(ph[t]).toLocaleString('en-US'); if (document.activeElement !== inp) inp.value = plan[key][t] == null ? '' : numFmt({ type: 'money' }, plan[key][t]); });
+  });
+  return det;
+}
+function buildInputs() {
+  const host = $('#sections');
+  for (const s of SECTIONS) {
+    const sumEl = el('span', { class: 's' });
+    const d = el('details', { class: 'sec', id: 'sec-' + s.id }, el('summary', {}, el('span', { class: 't' }, s.title), sumEl), el('div', { class: 'fields' }, s.fields.map(buildField)));
+    if (s.open) d.open = true;
+    host.append(d);
+    refreshers.push(() => { sumEl.textContent = s.sum(plan); });
+  }
+}
+
+/* ================= charts ================= */
+function niceTop(max) {
+  if (!(max > 0)) return { top: 1, step: 1 };
+  const raw = max / 4, mag = Math.pow(10, Math.floor(Math.log10(raw))), n = raw / mag;
+  const step = (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * mag;
+  return { top: Math.ceil(max / step - 1e-9) * step, step };
+}
+const axisFmt = (v, top) => v === 0 ? '$0' : top >= 1e6 ? '$' + +(v / 1e6).toFixed(2) + 'M' : top >= 1e3 ? '$' + +(v / 1e3).toFixed(1) + 'K' : '$' + Math.round(v);
+const LAST = {};
+function legend(host, items) {
+  if (host.id) (LAST[host.id.replace('-legend', '')] = LAST[host.id.replace('-legend', '')] || {}).legend = items;
+  host.innerHTML = items.map((it) => `<span><i class="${it.kind || ''}" style="${it.kind ? 'border-color' : 'background'}:${it.color};${it.opacity ? 'opacity:' + it.opacity : ''}"></i>${esc(it.name)}</span>`).join('');
+}
+function chart(host, cfg) {
+  if (host.id) (LAST[host.id] = LAST[host.id] || {}).cfg = cfg;
+  const W = cfg.w || Math.max(260, Math.floor(host.clientWidth)), H = cfg.h || (W < 520 ? 250 : 310);
+  const m = { l: 50, r: cfg.endLabels ? 44 : 10, t: 12, b: 26 }, iw = W - m.l - m.r, ih = H - m.t - m.b, n = cfg.x.length;
+  const stacks = cfg.stacks || [], lines = cfg.lines || [], bands = cfg.bands || [];
+  let max = 0;
+  for (let i = 0; i < n; i++) {
+    let s = 0; for (const st of stacks) s += Math.max(0, st.values[i]);
+    if (cfg.short) s += cfg.short[i];
+    max = Math.max(max, s);
+    for (const l of lines) max = Math.max(max, l.values[i]);
+    for (const b of bands) max = Math.max(max, b.hi[i]);
+  }
+  const { top, step } = niceTop(max);
+  const X = (i) => cfg.bars ? m.l + (i + 0.5) * iw / n : m.l + i * iw / (n - 1), Y = (v) => m.t + ih - Math.min(v, top * 1.05) / top * ih;
+  let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="${esc(cfg.label || '')}">`;
+  for (let v = 0; v <= top + 1e-9; v += step) s += `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line-2)"/><text x="${m.l - 8}" y="${Y(v) + 4}" text-anchor="end">${axisFmt(v, top)}</text>`;
+  const every = W < 560 ? 5 : n > 14 ? 2 : 1;
+  for (let i = 0; i < n; i++) if (i % every === 0 && (every === 1 || i < n - 1 || (n - 1) % every === 0)) s += `<text x="${X(i)}" y="${H - 7}" text-anchor="middle">${cfg.x[i]}</text>`;
+  for (const b of bands) {
+    let p = ''; for (let i = 0; i < n; i++) p += `${i ? 'L' : 'M'}${X(i)},${Y(b.hi[i])}`; for (let i = n - 1; i >= 0; i--) p += `L${X(i)},${Y(b.lo[i])}`;
+    s += `<path d="${p}Z" fill="${b.color}" opacity="${b.opacity}"/>`;
+  }
+  if (stacks.length && !cfg.bars) {
+    const cum = new Array(n).fill(0);
+    for (const st of stacks) {
+      let p = ''; const lo = cum.slice();
+      for (let i = 0; i < n; i++) { cum[i] += Math.max(0, st.values[i]); p += `${i ? 'L' : 'M'}${X(i)},${Y(cum[i])}`; }
+      for (let i = n - 1; i >= 0; i--) p += `L${X(i)},${Y(lo[i])}`;
+      s += `<path d="${p}Z" fill="${st.color}" opacity=".9" stroke="var(--surface)" stroke-width="1.5" stroke-linejoin="round"/>`;
+    }
+  }
+  if (cfg.bars) {
+    const bw = Math.max(4, Math.min(24, iw / n * 0.66));
+    for (let i = 0; i < n; i++) {
+      let cum = 0; const segs = stacks.filter((st) => st.values[i] > top * 0.0005);
+      segs.forEach((st, j) => {
+        const y1 = Y(cum + st.values[i]), y0 = Y(cum), last = j === segs.length - 1 && !(cfg.short && cfg.short[i] > 0);
+        const h = Math.max(0.5, y0 - y1 - (j < segs.length - 1 || !last ? 2 : 0)), x = X(i) - bw / 2, yy = y0 - h, r = last ? Math.min(4, h, bw / 2) : 0;
+        s += r ? `<path d="M${x},${y0}V${yy + r}a${r},${r} 0 0 1 ${r},${-r}H${x + bw - r}a${r},${r} 0 0 1 ${r},${r}V${y0}Z" fill="${st.color}"/>` : `<rect x="${x}" y="${yy}" width="${bw}" height="${h}" fill="${st.color}"/>`;
+        cum += st.values[i];
+      });
+      if (cfg.short && cfg.short[i] > 0) { const y1 = Y(cum + cfg.short[i]), y0 = Y(cum); s += `<rect x="${X(i) - bw / 2 + 0.75}" y="${y1}" width="${bw - 1.5}" height="${Math.max(1, y0 - y1 - 1)}" rx="3" fill="var(--crit-soft)" stroke="var(--crit)" stroke-width="1.5" stroke-dasharray="3 2"/>`; }
+    }
+  }
+  for (const l of lines) {
+    let p = ''; for (let i = 0; i < n; i++) p += `${i ? 'L' : 'M'}${X(i)},${Y(l.values[i])}`;
+    s += `<path d="${p}" fill="none" stroke="${l.color}" stroke-width="${l.width || 2}" stroke-linejoin="round" stroke-linecap="round"${l.dash ? ' stroke-dasharray="5 4"' : ''}/>`;
+    if (!l.dash) s += `<circle cx="${X(n - 1)}" cy="${Y(l.values[n - 1])}" r="4" fill="${l.color}" stroke="var(--surface)" stroke-width="2"/>`;
+  }
+  if (cfg.endLabels) {
+    const ys = lines.map((l) => Y(l.values[n - 1]) + 4);
+    for (let k = 1; k < ys.length; k++) if (ys[k] - ys[k - 1] < 13) ys[k] = ys[k - 1] + 13;
+    lines.forEach((l, k) => { s += `<text class="lbl" x="${X(n - 1) + 9}" y="${ys[k]}">${esc(l.end || '')}</text>`; });
+  }
+  s += `<g class="hover" style="display:none"><line y1="${m.t}" y2="${m.t + ih}" stroke="var(--ink-3)" stroke-width="1"/></g><rect x="${m.l}" y="${m.t}" width="${iw}" height="${ih}" fill="transparent"/></svg><div class="tip"></div>`;
+  host.innerHTML = s;
+  const svg = host.firstChild, hover = $('.hover', host), hl = $('line', hover), tip = $('.tip', host);
+  const move = (e) => {
+    const r = svg.getBoundingClientRect(), px = (e.clientX - r.left) * (W / r.width);
+    const i = Math.max(0, Math.min(n - 1, cfg.bars ? Math.floor((px - m.l) / (iw / n)) : Math.round((px - m.l) / (iw / (n - 1)))));
+    hover.style.display = ''; hl.setAttribute('x1', X(i)); hl.setAttribute('x2', X(i));
+    let rows = '', tot = 0;
+    if (cfg.tipRows) rows = cfg.tipRows(i);
+    else {
+      for (const l of lines) rows += `<div><span><i style="background:${l.color}"></i>${esc(l.name)}</span><b>${money(l.values[i])}</b></div>`;
+      for (const st of stacks.slice().reverse()) { tot += st.values[i]; if (st.values[i] > 0.5 || stacks.length < 4) rows += `<div><span><i style="background:${st.color}"></i>${esc(st.name)}</span><b>${money(st.values[i])}</b></div>`; }
+      if (cfg.short && cfg.short[i] > 0.5) rows += `<div><span><i style="background:var(--crit)"></i>Not covered</span><b>${money(cfg.short[i])}</b></div>`;
+      if (stacks.length > 1 && cfg.total) rows += `<div class="tot"><span>${esc(cfg.total)}</span><b>${money(tot)}</b></div>`;
+      for (const b of bands) rows += `<div><span><i style="background:${b.color};opacity:${Math.min(1, b.opacity * 2.4)}"></i>${esc(b.name)}</span><b>${short(b.lo[i])} – ${short(b.hi[i])}</b></div>`;
+    }
+    tip.innerHTML = `<h5>${esc(cfg.tipHead ? cfg.tipHead(i) : cfg.x[i])}</h5>${rows}`;
+    const cx = X(i) * (r.width / W), tw = tip.offsetWidth;
+    tip.style.left = Math.max(0, Math.min(r.width - tw, cx + 14 + tw > r.width ? cx - tw - 14 : cx + 14)) + 'px';
+    tip.style.top = '8px'; tip.classList.add('on');
+  };
+  const leave = () => { hover.style.display = 'none'; tip.classList.remove('on'); };
+  svg.addEventListener('pointermove', move); svg.addEventListener('pointerdown', move); svg.addEventListener('pointerleave', leave);
+}
+
+/* ================= rendering ================= */
+const C = { ira: 'var(--s1)', brok: 'var(--s2)', roth: 'var(--s3)', ss: 'var(--s4)', other: 'var(--s5)' };
+function scenNames() { return [plan.growth1, plan.growth2, plan.growth3].map((g) => pctTrim(g) + ' growth'); }
+function renderDeterministic() {
+  const eng = toEngine(plan), R = det[ui.scen], rows = R.rows, years = rows.map((r) => r.year), g = [plan.growth1, plan.growth2, plan.growth3][ui.scen];
+  const tipHead = (i) => `${rows[i].year} · age ${rows[i].a1}${rows[i].a2 ? ' / ' + rows[i].a2 : ''}`;
+  // scenario switch
+  $('#scen-seg').innerHTML = ''; scenNames().forEach((nm, i) => $('#scen-seg').append(el('button', { type: 'button', 'aria-pressed': String(i === ui.scen), onclick: () => { ui.scen = i; renderAll(); } }, nm)));
+  $('#hero-eyebrow').textContent = `${years[0]}–${years[19]} · ${pctTrim(g)} average growth`;
+  $('#example-tag').style.display = ui.edited ? 'none' : '';
+  // tiles
+  const conv = sum(rows.map((r) => r.conv)), needAll = sum(rows.map((r) => r.needs)), firstShort = rows.find((r) => r.unfunded > 0.01), iraEmpty = rows.find((r) => r.ira < 1);
+  const tiles = [
+    ['Savings after 20 years', short(R.end), `at a steady ${pctTrim(g)} a year`],
+    ['Taxes over 20 years', short(R.totalTax), needAll > 0 ? `${pct(R.totalTax / needAll, 0)} of everything the plan pays out` : ''],
+    ['Moved from IRA to Roth', short(conv), iraEmpty ? `IRAs empty by ${iraEmpty.year}` : `${short(rows[19].ira)} still in IRAs`],
+    ['First year short of cash', firstShort ? String(firstShort.year) : 'None', firstShort ? `age ${firstShort.a1}; short ${short(R.cumGap)} in all${firstShort.ira > 1000 ? ', with IRA money untouched' : ''}` : 'every year is covered'],
+  ];
+  $('#tiles').innerHTML = tiles.map((t) => `<div class="tile"><div class="eyebrow">${t[0]}</div><div class="v num">${t[1]}</div><div class="n">${t[2]}</div></div>`).join('');
+  // runway
+  const host = $('#runway'), W = Math.max(260, host.clientWidth), H = 92, maxT = Math.max(1, ...rows.map((r) => r.total)), bw = W / 20;
+  let sv = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="Total savings by year">`;
+  rows.forEach((r, i) => { const h = Math.max(3, r.total / maxT * 58), bad = r.unfunded > 0.01;
+    sv += `<rect x="${i * bw + 2}" y="${64 - h}" width="${bw - 4}" height="${h}" rx="3" fill="${bad ? 'var(--crit)' : 'var(--accent)'}" opacity="${bad ? 1 : 0.35 + 0.65 * (r.total / maxT)}"><title>${r.year}: ${money(r.total)}${bad ? ' (short ' + money(r.unfunded) + ')' : ''}</title></rect>`;
+    if ((i % 5 === 0 && !(i === 15 && W < 520)) || i === 19) { const anc = i === 0 ? 'start' : i === 19 ? 'end' : 'middle', tx = i === 0 ? 2 : i === 19 ? W - 2 : i * bw + bw / 2;
+      sv += `<text x="${tx}" y="78" text-anchor="${anc}" style="font-family:var(--mono);font-size:11px;fill:var(--ink-3)">${r.year}</text><text x="${tx}" y="90" text-anchor="${anc}" style="font-family:var(--mono);font-size:10px;fill:var(--ink-3)">age ${r.a1}</text>`; } });
+  host.innerHTML = sv + '</svg>';
+  $('#runway-cap').textContent = `Total savings each year at a steady ${pctTrim(g)}`;
+  // chips
+  const chips = [], add = (y, t, crit) => chips.push({ y, t, crit });
+  const ssStart = rows.find((r) => r.ss > 0); if (ssStart) add(ssStart.year, ssStart.t === 0 ? 'Social Security already paying' : 'Social Security starts');
+  const rmdStart = rows.find((r) => r.rmd > 0); if (rmdStart) add(rmdStart.year, `Required withdrawals begin (age ${rmdStart.rmd1 > 0 ? rmdStart.a1 : rmdStart.a2})`);
+  const q = plan.rothEstYear + 5; if (q > years[0] && q <= years[19]) add(q, 'Roth earnings become tax-free');
+  const irm = rows.filter((r) => r.irmaa > 0); if (irm.length) add(irm[0].year, `Medicare surcharge in ${irm.length} year${irm.length > 1 ? 's' : ''} (${short(sum(irm.map((r) => r.irmaa)))})`);
+  const amt = rows.filter((r) => r.amt > 0.5); if (amt.length) add(amt[0].year, `Alternative minimum tax applies (${short(sum(amt.map((r) => r.amt)))})`);
+  if (iraEmpty) add(iraEmpty.year, 'IRAs fully converted');
+  plan.events.forEach((ev) => { if (ev.year >= years[0] && ev.year <= years[19]) add(ev.year, ev.kind === 'home' ? 'Home sale' : (ev.amount < 0 ? 'Cash outflow' : 'Inheritance / cash in')); });
+  if (firstShort) add(firstShort.year, 'Cash runs short', true);
+  chips.sort((a, b) => a.y - b.y);
+  $('#chips').innerHTML = chips.map((c) => `<span class="chip${c.crit ? ' crit' : ''}"><b>${c.y}</b>${esc(c.t)}</span>`).join('');
+
+  // balances
+  $('#bal-dek').textContent = `End-of-year balances at a steady ${pctTrim(g)}. Pre-tax IRAs shrink as money is withdrawn or converted; the right-hand chart compares total savings across all three growth scenarios.`;
+  const mix = [{ name: 'Pre-tax IRAs', color: C.ira, values: rows.map((r) => r.ira) }, { name: 'Taxable brokerage', color: C.brok, values: rows.map((r) => r.brok) }, { name: 'Roth and cash', color: C.roth, values: rows.map((r) => r.roth) }];
+  legend($('#mix-legend'), mix); chart($('#mix'), { x: years, stacks: mix, total: 'Total savings', tipHead, label: 'Account balances by year' });
+  const sc = det.map((d, i) => ({ name: scenNames()[i], end: pctTrim([plan.growth1, plan.growth2, plan.growth3][i]), color: ['var(--scen-a)', 'var(--scen-b)', 'var(--scen-c)'][i], values: Array.from(d.totals), width: i === ui.scen ? 3 : 2 }));
+  legend($('#scen-legend'), sc.map((x) => ({ name: x.name, color: x.color, kind: 'ln' }))); chart($('#scen'), { x: years, lines: sc, endLabels: true, tipHead, label: 'Total savings under three growth scenarios' });
+
+  // cash flow
+  const cash = [{ name: 'Other income', color: C.other, values: rows.map((r) => r.other) }, { name: 'Social Security', color: C.ss, values: rows.map((r) => r.ss) }, { name: 'Roth and cash', color: C.roth, values: rows.map((r) => r.rothDraw) }, { name: 'Brokerage sales', color: C.brok, values: rows.map((r) => r.brokDraw) }].filter((x) => sum(x.values) > 0.5);
+  const need = { name: 'Spending + all taxes', color: 'var(--ink)', values: rows.map((r) => r.needs) }, spend = { name: 'Spending only', color: 'var(--ink-3)', values: rows.map((r) => r.spend), dash: true };
+  legend($('#cash-legend'), cash.concat([{ name: need.name, color: need.color, kind: 'ln' }, { name: spend.name, color: spend.color, kind: 'dash' }], firstShort ? [{ name: 'Not covered', color: 'var(--crit)' }] : []));
+  chart($('#cash'), { x: years, bars: true, stacks: cash, lines: [need, spend], short: rows.map((r) => r.unfunded), total: 'Cash available', tipHead, label: 'Cash sources against yearly cost' });
+
+  // taxes
+  const taxDefs = [['Federal income tax', 'var(--s1)', (r) => r.fed], ['State income tax', 'var(--s2)', (r) => r.stateTax], ['Capital-gains tax', 'var(--s3)', (r) => r.ltcg + r.homeTax], ['Investment surtax (NIIT)', 'var(--s4)', (r) => r.niit], ['Medicare surcharge (IRMAA)', 'var(--s5)', (r) => r.irmaa], ['Self-employment tax', 'var(--s6)', (r) => r.seTax]];
+  const tax = taxDefs.map(([name, color, f]) => ({ name, color, values: rows.map(f) })).filter((x) => sum(x.values) > 0.5);
+  $('#tax-dek').textContent = `About ${short(R.totalTax)} over 20 years at ${pctTrim(g)} growth. The heaviest year is ${rows.reduce((a, b) => (b.taxes > a.taxes ? b : a)).year}.`;
+  legend($('#tax-legend'), tax); chart($('#tax'), { x: years, bars: true, stacks: tax, total: 'All taxes', tipHead, label: 'Taxes by type and year',
+    tipRows: (i) => tax.slice().reverse().filter((x) => x.values[i] > 0.5).map((x) => `<div><span><i style="background:${x.color}"></i>${esc(x.name)}</span><b>${money(x.values[i])}</b></div>`).join('') + `<div class="tot"><span>All taxes</span><b>${money(rows[i].taxes)}</b></div><div><span>Share of the year’s cost</span><b>${pct(rows[i].needs > 0 ? rows[i].taxes / rows[i].needs : 0, 0)}</b></div>` });
+  let tt = `<thead><tr><th>Tax</th>${scenNames().map((s) => `<th>${s}</th>`).join('')}</tr></thead><tbody>`;
+  taxDefs.forEach(([name, , f]) => { const v = det.map((d) => sum(d.rows.map(f))); if (Math.max(...v) > 0.5) tt += `<tr><td>${name}</td>${v.map((x) => `<td>${money(x)}</td>`).join('')}</tr>`; });
+  $('#tax-table').innerHTML = tt + `<tr class="tot"><td>All taxes</td>${det.map((d) => `<td>${money(d.totalTax)}</td>`).join('')}</tr></tbody>`;
+
+  // IRA and Roth
+  const P = FED[plan.status === 'Single' ? 'Single' : 'MFJ'], bi = FED_RATES.indexOf(plan.targetBracket);
+  const topOf = rows.map((r) => (bi >= 0 && bi < 6 ? P.tops[bi] : 999999) * Math.pow(1 + plan.fedIdx, r.t + Math.max(0, plan.startYear - 2027)));
+  $('#ira-dek').textContent = `Current rule: ${plan.strategy}. ${STRATEGIES.find((x) => x[0] === plan.strategy)[1]} Converting early means paying tax now so later growth and withdrawals are tax-free.`;
+  const dist = [{ name: 'Required minimum', color: C.ira, values: rows.map((r) => r.rmd) }, { name: 'Converted to Roth', color: C.roth, values: rows.map((r) => r.conv) }];
+  legend($('#dist-legend'), dist); chart($('#dist'), { x: years, bars: true, stacks: dist, total: 'Taken from IRAs', tipHead, label: 'IRA withdrawals by year' });
+  const showTop = /Stay|Minimize/.test(plan.strategy) && plan.targetBracket < 0.37;
+  const tiS = [{ name: 'Taxable income', color: 'var(--scen-b)', values: rows.map((r) => r.ti) }], tiL = showTop ? [{ name: `Top of ${Math.round(plan.targetBracket * 100)}% bracket`, color: 'var(--accent)', values: topOf, dash: true }] : [];
+  legend($('#ti-legend'), tiS.concat(tiL.map((l) => ({ name: l.name, color: l.color, kind: 'dash' }))));
+  chart($('#ti'), { x: years, bars: true, stacks: tiS, lines: tiL, tipHead, label: 'Taxable income by year',
+    tipRows: (i) => `<div><span><i style="background:var(--scen-b)"></i>Taxable income</span><b>${money(rows[i].ti)}</b></div>${showTop ? `<div><span>Top of target bracket</span><b>${money(topOf[i])}</b></div>` : ''}<div><span>Marginal bracket</span><b>${Math.round(rows[i].marginal * 100)}%</b></div><div><span>Deduction used</span><b>${money(rows[i].dedUsed + rows[i].senior)}</b></div>` });
+
+  // strategies
+  const strat = STRATEGIES.map(([name]) => { const r = runAll(Object.assign({}, eng, { strategy: name }))[ui.scen]; return { name, end: r.end, ira: r.endIra, tax: r.totalTax, gap: r.cumGap }; });
+  const mEnd = Math.max(1, ...strat.map((x) => x.end)), mTax = Math.max(1, ...strat.map((x) => x.tax));
+  $('#strat-table').innerHTML = `<thead><tr><th>Rule</th><th>Savings in 20 yrs</th><th>Still in IRAs</th><th>Taxes, 20 yrs</th><th>Shortfall</th><th></th></tr></thead><tbody>` + strat.map((x) =>
+    `<tr class="${x.name === plan.strategy ? 'cur' : ''}"><td>${x.name}${x.name === plan.strategy ? ' <span class="eyebrow">· current</span>' : ''}</td><td><span class="mini" style="width:${Math.round(x.end / mEnd * 48)}px"></span>${money(x.end)}</td><td>${money(x.ira)}</td><td><span class="mini tax" style="width:${Math.round(x.tax / mTax * 48)}px"></span>${money(x.tax)}</td><td class="${x.gap > 0.5 ? 'neg' : 'zero'}">${x.gap > 0.5 ? money(x.gap) : 'None'}</td><td>${x.name === plan.strategy ? '' : `<button class="btn small" type="button" data-strat="${esc(x.name)}">Use</button>`}</td></tr>`).join('') + '</tbody>';
+  // year table
+  renderYearTable(rows);
+}
+const YEAR_ROWS = [
+  ['grp', 'What the year costs'], ['Spending', 'spend'], ['Federal income tax', 'fed'], ['Capital-gains tax', (r) => r.ltcg + r.homeTax], ['Investment surtax (NIIT)', 'niit'], ['Medicare surcharge (IRMAA)', 'irmaa'], ['State income tax', 'stateTax'], ['Self-employment tax', 'seTax'], ['tot', 'Total cost', 'needs'],
+  ['grp', 'Where the cash comes from'], ['Social Security', 'ss'], ['Other income', 'other'], ['Roth and cash draw', 'rothDraw'], ['Brokerage sales', 'brokDraw'], ['neg', 'Not covered', 'unfunded'],
+  ['grp', 'IRA activity'], ['Required minimum', 'rmd'], ['Converted to Roth', 'conv'], ['tot', 'Total from IRAs', 'dist'],
+  ['grp', 'Balances at year end'], ['Your IRA', 'ira1'], ['Spouse’s IRA', 'ira2'], ['Roth and cash', 'roth'], ['Brokerage', 'brok'], ['Brokerage cost basis', 'basis'], ['tot', 'Total savings', 'total'],
+  ['grp', 'Tax detail'], ['Taxable Social Security', 'ssTaxable'], ['Income before deductions', 'gross'], ['Deductions', (r) => r.dedUsed + r.senior], ['Taxable income', 'ti'], ['pct', 'Marginal federal bracket', 'marginal'], ['pct', 'Taxes as share of total cost', (r) => (r.needs > 0 ? r.taxes / r.needs : 0)],
+];
+function yearTableData(rows) {
+  const out = [['', ...rows.map((r) => r.year)], ['Age', ...rows.map((r) => r.a2 ? `${r.a1} / ${r.a2}` : r.a1)]];
+  for (const d of YEAR_ROWS) {
+    if (d[0] === 'grp') { out.push([d[1].toUpperCase()]); continue; }
+    const kind = ['tot', 'neg', 'pct'].includes(d[0]) ? d[0] : '', name = kind ? d[1] : d[0], f = kind ? d[2] : d[1], get = typeof f === 'function' ? f : (r) => r[f];
+    out.push([name, ...rows.map(get)].concat([[kind]]));
+  }
+  return out;
+}
+function renderYearTable(rows) {
+  const data = yearTableData(rows);
+  let h = `<thead><tr><th>Year<br>Age</th>${rows.map((r, i) => `<th>${r.year}<br>${data[1][i + 1]}</th>`).join('')}</tr></thead><tbody>`;
+  for (const row of data.slice(2)) {
+    if (row.length === 1) { h += `<tr class="grp"><td colspan="21">${esc(row[0])}</td></tr>`; continue; }
+    const kind = row[row.length - 1][0], vals = row.slice(1, 21);
+    h += `<tr class="${kind === 'tot' ? 'tot' : ''}"><td>${esc(row[0])}</td>${vals.map((v) => kind === 'pct' ? `<td>${Math.round(v * 100)}%</td>` : `<td class="${kind === 'neg' && v > 0.5 ? 'neg' : Math.abs(v) < 0.5 ? 'zero' : ''}">${Math.abs(v) < 0.5 ? '–' : Math.round(v).toLocaleString('en-US')}</td>`).join('')}</tr>`;
+  }
+  $('#year-table').innerHTML = h + '</tbody>';
+}
+function renderMC() {
+  const rows = det[ui.scen].rows, years = rows.map((r) => r.year), g = [plan.growth1, plan.growth2, plan.growth3][ui.scen];
+  const dots = $('#dots');
+  if (!dots.children.length) for (let i = 0; i < 100; i++) dots.append(el('i', { class: 'wait' }));
+  $('#paths-seg').innerHTML = ''; [[2000, '2,000 markets'], [10000, '10,000 markets']].forEach(([v, t]) => $('#paths-seg').append(el('button', { type: 'button', 'aria-pressed': String(ui.paths === v), onclick: () => { ui.paths = v; renderMC(); startMC(0); } }, t)));
+  const pill = $('#hero-pill');
+  if (!mc) {
+    Array.from(dots.children).forEach((d) => { d.className = 'wait'; });
+    $('#hero-pct').innerHTML = '–<small>%</small>'; pill.className = 'pill busy'; pill.textContent = 'Simulating…';
+    $('#hero-say').textContent = `Running ${ui.paths.toLocaleString('en-US')} simulated markets.`; $('#dots-note').textContent = '';
+    return;
+  }
+  const M = mc[ui.scen], s = M.success, lit = M.fails > 0 ? Math.min(99, Math.round(s * 100)) : 100;
+  Array.from(dots.children).forEach((d, i) => { d.style.transitionDelay = (mcBusy ? 0 : i * 5) + 'ms'; d.className = i < lit ? '' : 'miss'; });
+  $('#hero-pct').innerHTML = `${s >= 0.9995 ? '100' : (s * 100).toFixed(1)}<small>%</small>`;
+  const v = s >= 0.9 ? ['good', 'Strong'] : s >= 0.75 ? ['warn', 'Solid, with some risk'] : s >= 0.5 ? ['warn', 'Shaky'] : ['crit', 'Likely to run short'];
+  const icon = v[0] === 'good' ? '<path d="M5 12.5l4.5 4.5L19 7.5"/>' : v[0] === 'warn' ? '<path d="M12 8v5M12 16.5v.5"/><path d="M12 3.5 21.5 20h-19z"/>' : '<path d="M7 7l10 10M17 7 7 17"/>';
+  pill.className = 'pill ' + (mcBusy ? 'busy' : v[0]); pill.innerHTML = mcBusy ? 'Updating…' : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${icon}</svg>${v[1]}`;
+  const last = rows[19];
+  $('#hero-say').innerHTML = `In <b>${M.successCount.toLocaleString('en-US')} of ${M.paths.toLocaleString('en-US')}</b> simulated markets averaging ${pctTrim(g)} a year, savings cover every year through ${last.year}, when you are ${last.a1}.` + (M.fails ? ` In the rest, cash first runs short around ${years[0] + Math.round(M.avgFailYear) - 1}.` : '');
+  $('#dots-note').textContent = `Each dot is ${Math.round(M.paths / 100)} markets`;
+  // scenario tiles
+  $('#scen-tiles').innerHTML = ''; mc.forEach((m, i) => $('#scen-tiles').append(el('button', { class: 'scen-tile', type: 'button', 'aria-pressed': String(i === ui.scen), onclick: () => { ui.scen = i; renderAll(); },
+    html: `<div><div class="eyebrow">${scenNames()[i]}</div><div class="v num">${m.success >= 0.9995 ? '100' : (m.success * 100).toFixed(1)}%</div></div><div class="n">${m.fails ? `${m.fails.toLocaleString('en-US')} run short, typically in ${years[0] + Math.round(m.avgFailYear) - 1}` : 'never runs short'}</div>` })));
+  // fan
+  const B = M.bands, acc = 'var(--accent)';
+  const bands = [{ name: '5th to 95th percentile', lo: B[0], hi: B[6], color: acc, opacity: 0.16 }, { name: '25th to 75th percentile', lo: B[2], hi: B[4], color: acc, opacity: 0.3 }];
+  const lines = [{ name: 'Median market', color: acc, values: B[3] }, { name: `Steady ${pctTrim(g)} every year`, color: 'var(--ink)', values: Array.from(det[ui.scen].totals), dash: true }];
+  legend($('#fan-legend'), [{ name: bands[0].name, color: acc, opacity: 0.3 }, { name: bands[1].name, color: acc, opacity: 0.6 }, { name: lines[0].name, color: acc, kind: 'ln' }, { name: lines[1].name, color: 'var(--ink)', kind: 'dash' }]);
+  chart($('#fan'), { x: years, bands, lines, label: 'Range of total savings across simulated markets', tipHead: (i) => `${rows[i].year} · age ${rows[i].a1}${rows[i].a2 ? ' / ' + rows[i].a2 : ''}` });
+  const lab = [['Very strong (95th)', 6], ['Good (75th)', 4], ['Median', 3], ['Poor (25th)', 2], ['Very poor (5th)', 0]];
+  $('#pct-cap').textContent = `Total savings by outcome, ${scenNames()[ui.scen]}`;
+  $('#pct-table').innerHTML = `<thead><tr><th>Outcome</th>${[4, 9, 14, 19].map((y) => `<th>${years[y]}</th>`).join('')}</tr></thead><tbody>` + lab.map(([n, k]) => `<tr class="${k === 3 ? 'tot' : ''}"><td>${n}</td>${[4, 9, 14, 19].map((y) => `<td class="${B[k][y] < 0.5 ? 'neg' : ''}">${short(B[k][y])}</td>`).join('')}</tr>`).join('') + '</tbody>';
+}
+function renderMethod() {
+  $('#method-body').innerHTML = `
+<p>The plan runs 20 years. Each year it works out income, deductions, federal and state tax, required IRA withdrawals, any Roth conversion, and then how much has to come out of Roth, cash and the brokerage account to pay for the year. Selling brokerage holdings creates capital gains, which raises the tax, which raises what must be sold, so each year is solved until those agree to the cent.</p>
+<h3>What is modeled</h3>
+<ul><li>Federal income tax on a 2027 baseline, indexed forward; long-term capital-gains brackets; the 3.8% investment surtax; the alternative minimum tax; self-employment tax.</li>
+<li>Taxable Social Security under the provisional-income rules; the standard, age-65 and enhanced senior deductions.</li>
+<li>Medicare IRMAA surcharges from income two years earlier.</li>
+<li>Required minimum distributions for each spouse from the IRS Uniform Lifetime Table, starting at 73 or 75 by birth year.</li>
+<li>State income tax for all 50 states and DC. California uses a dedicated calculation that excludes Social Security and applies exemption credits.</li>
+<li>Roth five-year and age 59½ rules, cost basis in the brokerage account, the home-sale exclusion.</li></ul>
+<h3>The market simulation</h3>
+<p>Each simulated market draws 20 yearly returns from a lognormal distribution whose average is the scenario’s growth rate and whose spread is the volatility you set. The same random markets are used for all three scenarios so they can be compared fairly. A market counts as a success when every year’s cost is covered.</p>
+<h3>Where the math comes from</h3>
+<p>The calculations follow the Retirement Cash Flow Planning Tool v30.1 workbook by Red Smith, rebuilt here from its formulas. On the workbook’s own example and on a dozen other test plans, every yearly figure in this page matches the workbook to the cent. Four things differ on purpose, where the workbook’s formulas did not do what its labels say:</p>
+<ul><li>“Real change per year” on spending is applied here. The workbook’s spending row ignores it.</li>
+<li>A fixed year-2 IRA withdrawal applies to year 2 only. The workbook applies it to years 2 through 20.</li>
+<li>Self-employment tax in years 19 and 20 uses 1099 income. The workbook’s last two columns point at the wrong row.</li>
+<li>Washington’s capital-gains tax uses each scenario’s own gains. The workbook uses Scenario 3’s gains for all three.</li></ul>
+<h3>Limits</h3>
+<p>This is a planning estimate, not tax, legal or investment advice. Tax law after 2027 is projected, not known. State calculations are simplified bracket estimates. All accounts earn the same return. IRAs are only tapped by the rule you pick, so a year counts as short when Roth, cash and brokerage money run out, even if IRA money remains. Check any decision that matters with a tax professional.</p>`;
+}
+function renderAll() { renderDeterministic(); renderMC(); }
+
+/* ================= compute + Monte Carlo ================= */
+let worker = null, runId = 0, mcTimer = 0;
+const workerURL = (() => { try { return URL.createObjectURL(new Blob([$('#engine-src').textContent + '\nonmessage=function(e){var d=e.data;var res=monteCarlo(d.inp,d.paths,d.seed,function(p){postMessage({id:d.id,p:p});});postMessage({id:d.id,res:res});};'], { type: 'text/javascript' })); } catch (e) { return null; } })();
+function startMC(delay) {
+  clearTimeout(mcTimer); mcBusy = true;
+  const bar = $('#mc-progress'); bar.classList.add('on'); bar.firstChild.style.width = '0%';
+  const pill = $('#hero-pill'); pill.className = 'pill busy'; pill.textContent = mc ? 'Updating…' : 'Simulating…';
+  mcTimer = setTimeout(() => {
+    const id = ++runId, msg = { id, inp: toEngine(plan), paths: ui.paths, seed: ui.seed };
+    const done = (res) => { if (id !== runId) return; mc = res; mcBusy = false; bar.classList.remove('on'); renderMC(); };
+    if (worker) { worker.terminate(); worker = null; }
+    try {
+      if (!workerURL) throw new Error('no worker');
+      worker = new Worker(workerURL);
+      worker.onmessage = (e) => { if (e.data.id !== runId) return; if (e.data.res) done(e.data.res); else bar.firstChild.style.width = Math.round(e.data.p * 100) + '%'; };
+      worker.onerror = () => { worker = null; done(monteCarlo(msg.inp, Math.min(msg.paths, 2000), msg.seed)); };
+      worker.postMessage(msg);
+    } catch (e) { setTimeout(() => done(monteCarlo(msg.inp, Math.min(msg.paths, 2000), msg.seed)), 20); }
+  }, delay == null ? 260 : delay);
+}
+function compute() { det = runAll(toEngine(plan)); }
+function save() { try { localStorage.setItem('glidepath.plan.v1', JSON.stringify({ plan, ui: { scen: ui.scen, paths: ui.paths, edited: ui.edited } })); } catch (e) { /* storage unavailable */ } }
+function refreshInputs() { refreshers.forEach((f) => f()); }
+function changed() { ui.edited = true; refreshInputs(); compute(); renderDeterministic(); startMC(); save(); }
+function adopt(obj) {
+  const p = structuredClone(DEFAULTS);
+  for (const k in DEFAULTS) if (obj && obj[k] !== undefined && typeof obj[k] === typeof DEFAULTS[k]) p[k] = obj[k];
+  for (const k of ['spendOverride', 'manual']) { p[k] = Array.from({ length: 20 }, (_, t) => (Array.isArray(p[k]) && p[k][t] != null && isFinite(+p[k][t]) ? +p[k][t] : null)); }
+  p.events = (Array.isArray(p.events) ? p.events : []).filter((e) => e && (e.kind === 'home' || e.kind === 'cash')).map((e) => ({ kind: e.kind, year: +e.year || p.startYear, gain: +e.gain || 0, cash: +e.cash || 0, amount: +e.amount || 0 }));
+  if (!STATES.includes(p.state) && p.state !== 'None') p.state = 'CA';
+  if (!STRATEGIES.some((s) => s[0] === p.strategy)) p.strategy = DEFAULTS.strategy;
+  plan = p;
+}
+function toast(t) { const e = $('#toast'); e.textContent = t; e.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove('on'), 2200); }
+async function copyText(text, okMsg) {
+  try { await navigator.clipboard.writeText(text); toast(okMsg); }
+  catch (e) { $('#dlg h3').textContent = 'Copy this text'; $('#dlg-text').value = text; $('#dlg-ok').style.display = 'none'; $('#dlg-err').textContent = ''; $('#dlg').showModal(); $('#dlg-text').select(); }
+}
+function wire() {
+  $('#btn-copy').onclick = () => copyText(JSON.stringify({ glidepath: 1, plan }), 'Plan copied. Paste it anywhere to keep or share it.');
+  $('#btn-paste').onclick = () => { $('#dlg h3').textContent = 'Load a plan'; $('#dlg-text').value = ''; $('#dlg-ok').style.display = ''; $('#dlg-err').textContent = ''; $('#dlg').showModal(); };
+  $('#dlg-cancel').onclick = () => $('#dlg').close();
+  $('#dlg-ok').onclick = () => { try { const o = JSON.parse($('#dlg-text').value); if (!o || !o.plan) throw 0; adopt(o.plan); $('#dlg').close(); mc = null; changed(); toast('Plan loaded.'); } catch (e) { $('#dlg-err').textContent = 'That does not look like a copied plan. Paste the whole text from “Copy plan”.'; } };
+  $('#btn-reset').onclick = () => { plan = structuredClone(DEFAULTS); mc = null; ui.scen = 0; changed(); ui.edited = false; $('#example-tag').style.display = ''; save(); toast('Back to the example plan.'); };
+  $('#btn-reroll').onclick = () => { ui.seed = (Math.random() * 2 ** 31) | 0; startMC(0); };
+  $('#btn-copy-table').onclick = () => copyText(yearTableData(det[ui.scen].rows).map((r) => (Array.isArray(r[r.length - 1]) ? r.slice(0, -1) : r).map((v) => typeof v === 'number' ? (Math.abs(v) < 1 && v !== 0 ? v.toFixed(4) : Math.round(v)) : v).join('\t')).join('\n'), 'Table copied. Paste it into a spreadsheet.');
+  $('#strat-table').addEventListener('click', (e) => { const b = e.target.closest('[data-strat]'); if (b) { plan.strategy = b.dataset.strat; changed(); toast('Now using ' + b.dataset.strat + '.'); } });
+  document.querySelectorAll('.pdf-btn').forEach((b) => { b.onclick = savePdf; });
+  enablePdf();
+  $('#fab').onclick = () => document.body.classList.add('editing');
+  $('#btn-done').onclick = () => document.body.classList.remove('editing');
+  let rz = 0; new ResizeObserver(() => { clearTimeout(rz); rz = setTimeout(() => { if (det) renderAll(); }, 120); }).observe($('#out'));
+}
+function start(hot) {
+  let saved = hot && hot.plan ? hot : null;
+  if (!saved) { try { saved = JSON.parse(localStorage.getItem('glidepath.plan.v1') || 'null'); } catch (e) { saved = null; } }
+  if (saved && saved.plan) { adopt(saved.plan); if (saved.ui) { ui.scen = [0, 1, 2].includes(saved.ui.scen) ? saved.ui.scen : 0; ui.paths = saved.ui.paths === 2000 ? 2000 : 10000; ui.edited = !!saved.ui.edited; } }
+  buildInputs(); wire(); renderMethod(); refreshInputs(); compute(); renderAll(); startMC(0);
+  try { window.claude && window.claude.hot && window.claude.hot.snapshot && window.claude.hot.snapshot(() => ({ plan, ui: { scen: ui.scen, paths: ui.paths, edited: ui.edited } })); } catch (e) { /* not in viewer */ }
+}
+
+/* ================= PDF report ================= */
+// The report is always drawn in the light palette, whatever theme the page is showing.
+const LIGHT = { surface: '#ffffff', 'line-2': '#e6eaf0', line: '#d6dce6', ink: '#0f1a2c', 'ink-2': '#44516a', 'ink-3': '#6b778c', accent: '#5a48d8',
+  crit: '#c93030', 'crit-soft': '#f9e1e1', s1: '#2a78d6', s2: '#eb6834', s3: '#1baf7a', s4: '#eda100', s5: '#e87ba4', s6: '#008300',
+  'scen-a': '#0f1a2c', 'scen-b': '#5d6b85', 'scen-c': '#a3adc0' };
+const lightHex = (c) => String(c).replace(/var\(--([a-z0-9-]+)\)/g, (m, k) => LIGHT[k] || '#888888');
+const rgb = (c) => { const h = lightHex(c).replace('#', ''); return [0, 2, 4].map((i) => parseInt(h.substr(i, 2), 16)); };
+const pdfSafe = (s) => String(s).replace(/[’‘]/g, "'").replace(/[“”]/g, '"').replace(/[–—−]/g, '-').replace(/½/g, ' 1/2').replace(/·/g, '|').replace(/[^\x20-\x7E]/g, '');
+let pdfSaver = null; // function(blob, filename) -> Promise
+async function enablePdf() {
+  const show = () => document.querySelectorAll('.pdf-btn').forEach((b) => { b.hidden = false; });
+  if (window.claude && typeof window.claude.use === 'function') {
+    try { const d = await window.claude.use('downloads'); if (d) { pdfSaver = (blob, filename) => d.save({ filename, data: blob }); show(); } } catch (e) { /* stays hidden */ }
+  } else { // opened outside Claude: an ordinary browser download works
+    pdfSaver = async (blob, filename) => { const u = URL.createObjectURL(blob), a = el('a', { href: u, download: filename }); document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000); };
+    show();
+  }
+}
+function chartPng(key, w, h) {
+  const src = LAST[key]; if (!src || !src.cfg) return Promise.resolve(null);
+  const host = el('div', { style: `position:absolute;left:-9999px;top:0;width:${w}px` }); document.body.append(host);
+  chart(host, Object.assign({}, src.cfg, { w, h }));
+  const svgEl = host.querySelector('svg'); svgEl.querySelector('.hover').remove(); svgEl.setAttribute('width', w);
+  const svg = lightHex(svgEl.outerHTML).replace(/<svg([^>]*)>/, '<svg$1><style>text{font-family:Helvetica,Arial,sans-serif;font-size:11px;fill:#6b778c}text.lbl{font-size:12px;fill:#44516a}</style>');
+  host.remove();
+  return new Promise((res) => {
+    const img = new Image(), k = 2.5;
+    img.onload = () => { try { const c = document.createElement('canvas'); c.width = w * k; c.height = h * k; const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height); res(c.toDataURL('image/png')); } catch (e) { res(null); } };
+    img.onerror = () => res(null);
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  });
+}
+function planFacts() {
+  const p = plan, mfj = p.status === 'MFJ', out = [];
+  const sec = (t, rows) => { out.push([t]); rows.filter(Boolean).forEach((r) => out.push(r)); };
+  sec('Household', [['Filing status', mfj ? 'Married, filing jointly' : 'Single'], ['State', p.state === 'None' ? 'No state tax' : p.state], ['Plan years', `${p.startYear} to ${p.startYear + 19}`], ['Age in first year', mfj ? `${p.age1} and ${p.age2}` : String(p.age1)]]);
+  sec('Savings', [['Your pre-tax IRA / 401(k)', money(p.ira1)], mfj && ['Spouse pre-tax IRA / 401(k)', money(p.ira2)], ['Roth and cash', money(p.roth)], ['Taxable brokerage', `${money(p.brokerage)} (basis ${Math.round(p.basisPct * 100)}%)`]]);
+  sec('Spending', [['Year-one spending', money(p.spendYr1)], ['Inflation / real change', `${pctTrim(p.inflation)} / ${pctTrim(p.spendAdj)}`], p.spendOverride.some((x) => x != null) && ['Years set by hand', String(p.spendOverride.filter((x) => x != null).length)]]);
+  sec('Social Security', [['You', `${money(p.ss1Amt)} from age ${p.ss1Age}`], mfj && ['Spouse', p.ss2Age ? `${money(p.ss2Amt)} from age ${p.ss2Age}` : 'None'], p.ssCut > 0 && ['Stress test', `${pctTrim(p.ssCut)} cut from ${p.ssCutYear}`]]);
+  const inc = [['Pension or annuity', 'pension'], ['W-2 wages', 'w2'], ['1099 / self-employment', 'se'], ['K-1 / partnership', 'k1'], ['Short-term gains', 'stcg'], ['Other taxable income', 'otherInc']].filter(([, k]) => p[k] > 0).map(([n, k]) => [n, `${money(p[k])}, growing ${pctTrim(p[k + 'G'])}`]);
+  if (inc.length) sec('Other income', inc);
+  sec('IRA and Roth strategy', [['Rule', p.strategy], /Stay|Minimize/.test(p.strategy) && ['Target bracket', Math.round(p.targetBracket * 100) + '%'], /Stay|Minimize|Deplete/.test(p.strategy) && ['Maximum bracket', Math.round(p.maxBracket * 100) + '%'],
+    p.strategy === 'Roth Conversion Year' && ['Conversion year', String(p.rothConvYear)], ['Shortfalls drawn from', p.gapFunding], p.earlyY1 > 0 && ['Fixed IRA withdrawal, year 1', money(p.earlyY1)], p.earlyY2 > 0 && ['Fixed IRA withdrawal, year 2', money(p.earlyY2)],
+    [`Income (MAGI) ${p.startYear - 2} / ${p.startYear - 1}`, `${money(p.magi1)} / ${money(p.magi2)}`]]);
+  sec('Growth and inflation', [['Scenario returns', `${pctTrim(p.growth1)}, ${pctTrim(p.growth2)}, ${pctTrim(p.growth3)}`], ['Market volatility', pctTrim(p.volatility)], ['Social Security inflation', pctTrim(p.ssInfl)], ['Federal / state indexing', `${pctTrim(p.fedIdx)} / ${pctTrim(p.stateIdx)}`]]);
+  sec('Deductions', [['Deduction', p.dedType === 'Standard' ? 'Standard' : `${p.dedType}: ${money(p.itemized)}, growing ${pctTrim(p.itemGrowth)}`], ['Senior deduction ends after', String(p.obbbaLast)]]);
+  if (p.events.length) sec('Home sale and windfalls', p.events.map((e) => [String(e.year), e.kind === 'home' ? `Home sale: gain ${money(e.gain)}, cash ${money(e.cash)}` : `Cash ${money(e.amount)}`]));
+  sec('Roth account', [['First Roth opened', String(p.rothEstYear)], ['Contributed / converted so far', `${money(p.rothContrib)} / ${money(p.rothConv)}`]]);
+  return out;
+}
+async function buildPdf() {
+  const doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'letter', compress: true });
+  const M = 40, INK = rgb('var(--ink)'), INK2 = rgb('var(--ink-2)'), INK3 = rgb('var(--ink-3)'), LINE = rgb('var(--line)'), ACC = rgb('var(--accent)');
+  let PW = 612, PH = 792, y = 0;
+  const T = (s, x, yy, o) => { o = o || {}; doc.setFont(o.font || 'helvetica', o.style || 'normal'); doc.setFontSize(o.size || 9.5); doc.setTextColor.apply(doc, o.color || INK); doc.text(pdfSafe(s), x, yy, { align: o.align || 'left', maxWidth: o.maxWidth }); };
+  const wrap = (s, w, size) => { doc.setFont('helvetica', 'normal'); doc.setFontSize(size || 9.5); return doc.splitTextToSize(pdfSafe(s), w); };
+  const rule = (yy, c) => { doc.setDrawColor.apply(doc, c || LINE); doc.setLineWidth(0.6); doc.line(M, yy, PW - M, yy); };
+  const eyebrow = (s, x, yy) => T(s.toUpperCase(), x, yy, { size: 7, color: INK3, font: 'courier' });
+  const page = (landscape) => { doc.addPage('letter', landscape ? 'landscape' : 'portrait'); PW = landscape ? 792 : 612; PH = landscape ? 612 : 792; y = M + 4; };
+  const heading = (s, sub) => { T(s, M, y + 16, { font: 'times', size: 19 }); y += 24; if (sub) { const l = wrap(sub, PW - 2 * M, 9); doc.setTextColor.apply(doc, INK2); doc.text(l, M, y + 8); y += l.length * 11 + 4; } y += 6; };
+  // rows: array of arrays; widths in pt; first column left, others right. opts: {head:[...], bold:Set(rowIndex), size, x}
+  const table = (rows, widths, o) => {
+    o = o || {}; const size = o.size || 8.5, rh = o.rh || size + 6.5, x0 = o.x == null ? M : o.x, tw = sum(widths);
+    if (o.head) { doc.setFillColor(237, 240, 245); doc.rect(x0, y, tw, rh, 'F'); let x = x0; o.head.forEach((h, i) => { T(h, i ? x + widths[i] - 5 : x + 5, y + rh - 5, { size: size - 1.5, color: INK3, font: 'courier', align: i ? 'right' : 'left' }); x += widths[i]; }); y += rh; }
+    rows.forEach((r, ri) => {
+      if (r.length === 1) { doc.setFillColor(244, 246, 249); doc.rect(x0, y, tw, rh, 'F'); T(r[0], x0 + 5, y + rh - 5, { size: size - 1.5, color: INK3, font: 'courier' }); y += rh; return; }
+      let x = x0; const bold = o.bold && o.bold.has(ri);
+      r.forEach((c, i) => { T(c, i ? x + widths[i] - 5 : x + 5, y + rh - 5, { size, style: bold ? 'bold' : 'normal', align: i ? 'right' : 'left', color: o.red && o.red(ri, i) ? rgb('var(--crit)') : INK }); x += widths[i]; });
+      doc.setDrawColor(230, 234, 240); doc.setLineWidth(0.4); doc.line(x0, y + rh, x0 + tw, y + rh); y += rh;
+    });
+    y += 8;
+  };
+  const drawLegend = (items) => {
+    let x = M; doc.setFontSize(8.5); doc.setFont('helvetica', 'normal');
+    (items || []).forEach((it) => {
+      const w = doc.getTextWidth(pdfSafe(it.name)) + 26; if (x + w > PW - M) { x = M; y += 12; }
+      const c = rgb(it.color);
+      if (it.kind) { doc.setDrawColor.apply(doc, c); doc.setLineWidth(1.6); if (it.kind === 'dash') doc.setLineDashPattern([3, 2], 0); doc.line(x, y + 5, x + 12, y + 5); doc.setLineDashPattern([], 0); }
+      else { const op = it.opacity || 1; doc.setFillColor.apply(doc, c.map((v) => Math.round(255 - (255 - v) * op))); doc.roundedRect(x, y + 1, 8, 8, 1.5, 1.5, 'F'); }
+      T(it.name, x + (it.kind ? 16 : 12), y + 8, { size: 8.5, color: INK2 }); x += w;
+    });
+    y += 16;
+  };
+  const figure = async (key, title, sub) => {
+    heading(title, sub); drawLegend(LAST[key] && LAST[key].legend);
+    const w = 720, h = 262, png = await chartPng(key, w, h), dw = PW - 2 * M, dh = dw * h / w;
+    if (png) doc.addImage(png, 'PNG', M, y, dw, dh, undefined, 'FAST'); else T('Chart could not be drawn in this browser.', M, y + 12, { color: INK3 });
+    y += dh + 16;
+  };
+
+  const R = det[ui.scen], rows = R.rows, years = rows.map((r) => r.year), names = scenNames(), g = [plan.growth1, plan.growth2, plan.growth3][ui.scen];
+  const fmtS = (m) => (m.success >= 0.9995 ? '100' : (m.success * 100).toFixed(1)) + '%';
+  // ---------- page 1: summary ----------
+  y = M;
+  T('Glidepath', M, y + 22, { font: 'times', size: 28 }); T('Retirement plan summary', PW - M, y + 10, { align: 'right', size: 10, color: INK2 });
+  T(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }), PW - M, y + 23, { align: 'right', size: 9, color: INK3 });
+  y += 36; rule(y); y += 22;
+  eyebrow(`Chance the money lasts all 20 years | ${years[0]} to ${years[19]} | ${pctTrim(g)} average growth`, M, y); y += 8;
+  if (mc) {
+    const m = mc[ui.scen], v = m.success >= 0.9 ? 'Strong' : m.success >= 0.75 ? 'Solid, with some risk' : m.success >= 0.5 ? 'Shaky' : 'Likely to run short';
+    T(fmtS(m), M, y + 50, { font: 'times', size: 60 });
+    const bx = M + 215, lines = wrap(`In ${m.successCount.toLocaleString('en-US')} of ${m.paths.toLocaleString('en-US')} simulated markets averaging ${pctTrim(g)} a year, savings cover every year through ${years[19]}, when you are ${rows[19].a1}.` + (m.fails ? ` In the rest, cash first runs short around ${years[0] + Math.round(m.avgFailYear) - 1}.` : ''), PW - M - bx, 10.5);
+    T(v, bx, y + 16, { size: 13, style: 'bold', color: m.success >= 0.9 ? [10, 138, 10] : m.success >= 0.5 ? [150, 100, 0] : rgb('var(--crit)') });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5); doc.setTextColor.apply(doc, INK2); doc.text(lines, bx, y + 32);
+  } else T('Market simulation was still running when this report was saved.', M, y + 20, { color: INK3 });
+  y += 72;
+  eyebrow('The three growth scenarios', M, y); y += 6;
+  table(det.map((d, i) => { const fs = d.rows.find((r) => r.unfunded > 0.01); return [names[i] + (i === ui.scen ? '  (shown in this report)' : ''), mc ? fmtS(mc[i]) : '-', money(d.end), mc ? money(mc[i].bands[3][19]) : '-', money(d.totalTax), fs ? String(fs.year) : 'None']; }),
+    [150, 70, 92, 92, 76, 52], { head: ['Scenario', 'Money lasts', `Savings in ${years[19]}`, 'Median market', 'Taxes, 20 yrs', 'First short'], bold: new Set([ui.scen]), red: (ri, i) => i === 5 && det[ri].cumGap > 0.01 });
+  eyebrow('Milestones', M, y + 4); y += 10;
+  const chips = Array.from(document.querySelectorAll('#chips .chip')).map((c) => [c.querySelector('b').textContent, c.textContent.replace(c.querySelector('b').textContent, '')]);
+  chips.forEach((c, i) => { const col = i % 2, xx = M + col * (PW - 2 * M) / 2; T(c[0], xx, y + 10, { size: 9, style: 'bold' }); T(c[1], xx + 30, y + 10, { size: 9, color: INK2 }); if (col === 1 || i === chips.length - 1) y += 13; });
+  y += 12; rule(y); y += 16;
+  eyebrow('What this plan assumes', M, y); y += 8;
+  const facts = planFacts(), colW = (PW - 2 * M - 20) / 2, yTop = y, secs = [];
+  facts.forEach((f) => { if (f.length === 1) secs.push({ title: f[0], rows: [] }); else secs[secs.length - 1].rows.push(f); });
+  const hOf = (sc) => 18.5 + sc.rows.length * 12.2, half = sum(secs.map(hOf)) / 2;
+  let col = 0, used = 0;
+  secs.forEach((sc) => {
+    if (col === 0 && used > 0 && used + hOf(sc) / 2 > half) { col = 1; y = yTop; }
+    const xx = M + col * (colW + 20);
+    T(sc.title, xx, y + 9, { size: 9, style: 'bold' }); y += 12.5;
+    sc.rows.forEach((f) => { T(f[0], xx, y + 9, { size: 8.5, color: INK2 }); T(f[1], xx + colW, y + 9, { size: 8.5, align: 'right' }); y += 12.2; });
+    y += 6; used += hOf(sc);
+  });
+
+  // ---------- page 2: markets + balances ----------
+  page(false);
+  if (mc) {
+    await figure('fan', `${mc[ui.scen].paths.toLocaleString('en-US')} different markets`, `Range of total savings across simulated markets averaging ${pctTrim(g)} a year with ${pctTrim(plan.volatility)} volatility.`);
+    const B = mc[ui.scen].bands, lab = [['Very strong markets (95th percentile)', 6], ['Good (75th)', 4], ['Median', 3], ['Poor (25th)', 2], ['Very poor (5th)', 0]];
+    table(lab.map(([n, k]) => [n].concat([4, 9, 14, 19].map((i) => money(B[k][i])))), [212, 80, 80, 80, 80], { head: ['Total savings by outcome'].concat([4, 9, 14, 19].map((i) => String(years[i]))), bold: new Set([2]) });
+  }
+  await figure('mix', 'Where the money sits', `End-of-year balances at a steady ${pctTrim(g)}.`);
+  // ---------- page 3: cash flow + taxes ----------
+  page(false);
+  await figure('cash', 'Paying for each year', 'Bars are where the cash comes from. The solid line is spending plus every tax; the dashed line is spending alone.');
+  await figure('tax', 'What goes to taxes', `About ${money(R.totalTax)} over 20 years at ${pctTrim(g)} growth.`);
+  const taxRows = Array.from(document.querySelectorAll('#tax-table tbody tr')).map((tr) => Array.from(tr.children).map((td) => td.textContent));
+  table(taxRows, [220, 104, 104, 104], { head: ['20-year totals'].concat(names), bold: new Set([taxRows.length - 1]) });
+  // ---------- page 4: IRA + strategies + notes ----------
+  page(false);
+  await figure('dist', 'IRA withdrawals and Roth conversions', `Current rule: ${plan.strategy}. ${STRATEGIES.find((x) => x[0] === plan.strategy)[1]}`);
+  heading('IRA strategies compared', `The same plan at ${pctTrim(g)} growth, changing only the IRA rule. Money still in an IRA is pre-tax.`);
+  const st = Array.from(document.querySelectorAll('#strat-table tbody tr')).map((tr) => Array.from(tr.children).slice(0, 5).map((td) => td.textContent.replace(/·\s*current/i, ' (current)').trim()));
+  table(st, [172, 96, 96, 96, 72], { head: ['Rule', `Savings in ${years[19]}`, 'Still in IRAs', 'Taxes, 20 yrs', 'Shortfall'], bold: new Set([st.findIndex((r) => /current/.test(r[0]))]), red: (ri, i) => i === 4 && st[ri][4] !== 'None' });
+  y += 6; eyebrow('Read this before relying on it', M, y); y += 6;
+  const note = wrap('This is a planning estimate, not tax, legal or investment advice. Federal tables start from a 2027 baseline and are projected forward; state taxes are simplified bracket estimates. Every account earns the same return. IRAs are only tapped by the rule chosen, so a year counts as short when Roth, cash and brokerage money run out, even if IRA money remains. The market simulation draws yearly returns at random around each scenario average; a different draw gives slightly different percentages. Check any decision that matters with a tax professional.', PW - 2 * M, 8.5);
+  doc.setTextColor.apply(doc, INK2); doc.text(note, M, y + 9);
+  // ---------- pages 5-6: every year ----------
+  const data = yearTableData(rows);
+  for (let half = 0; half < 2; half++) {
+    page(true); const a = 1 + half * 10, b = a + 10;
+    heading(`Every year, every number | ${years[a - 1]} to ${years[b - 2]}`, `${names[ui.scen]}, steady every year. Whole dollars.`);
+    const body = data.slice(2).map((r) => r.length === 1 ? [r[0]] : [r[0]].concat(r.slice(a, b).map((v) => { const k = r[r.length - 1][0]; return k === 'pct' ? Math.round(v * 100) + '%' : Math.abs(v) < 0.5 ? '-' : Math.round(v).toLocaleString('en-US'); })));
+    const bold = new Set(); data.slice(2).forEach((r, i) => { if (r.length > 1 && r[r.length - 1][0] === 'tot') bold.add(i); });
+    const neg = data.slice(2).findIndex((r) => r[0] === 'Not covered');
+    table(body, [152].concat(Array(10).fill(56)), { head: ['Year (age)'].concat(rows.slice(a - 1, b - 1).map((r) => `${r.year} (${r.a1})`)), bold, size: 8, rh: 13.2, red: (ri, i) => ri === neg && i > 0 && body[ri][i] !== '-' });
+  }
+  // footer on every page
+  const n = doc.getNumberOfPages();
+  for (let i = 1; i <= n; i++) { doc.setPage(i); const ps = doc.internal.pageSize, w = ps.getWidth(), h = ps.getHeight(); T('Glidepath | planning estimate, not tax or investment advice', M, h - 22, { size: 7.5, color: INK3 }); T(`Page ${i} of ${n}`, w - M, h - 22, { size: 7.5, color: INK3, align: 'right' }); }
+  return doc.output('blob');
+}
+async function savePdf() {
+  if (!window.jspdf) { toast('The PDF tool has not loaded. Check your connection, reload and try again.'); return; }
+  if (mcBusy) { toast('Still simulating markets. Try again in a moment.'); return; }
+  const btns = document.querySelectorAll('.pdf-btn'); btns.forEach((b) => { b.disabled = true; });
+  try {
+    const blob = await buildPdf(), d = new Date(), stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    await pdfSaver(blob, `Glidepath retirement plan ${stamp}.pdf`);
+    toast('PDF report saved.');
+  } catch (e) {
+    const code = e && e.code;
+    toast(code === 'declined' ? 'Nothing was saved.' : code === 'rate_limited' ? 'A save is already open. Finish that one first.' : code ? 'Saving files is not available in this view.' : 'The report could not be built. Reload and try again.');
+    if (!code) console.error(e);
+  } finally { btns.forEach((b) => { b.disabled = false; }); }
+}
+
+if (window.claude && window.claude.hot && window.claude.hot.ready) window.claude.hot.ready(start); else start((window.claude && window.claude.hot && window.claude.hot.data) || {});
+
+</script>
+</body>
+</html>
